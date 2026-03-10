@@ -1,9 +1,9 @@
-import db from './db.js';
+import { db } from './db.js';
 
 console.log('Seeding database...');
 
 // Check if any admin user already exists
-const existingAdmin = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
+const existingAdmin = await db.prepare('SELECT id FROM users WHERE role = $1').get('admin');
 
 if (existingAdmin) {
     console.log('Admin user already exists. Skipping seed.');
@@ -14,7 +14,7 @@ if (existingAdmin) {
 } else {
     // Clear all data
     // Note: We must delete in reverse order of dependencies to avoid FOREIGN KEY constraint failures
-    db.exec(`
+    await db.query(`
       DELETE FROM live_answers;
       DELETE FROM live_participants;
       DELETE FROM live_sessions;
@@ -34,9 +34,9 @@ if (existingAdmin) {
     `);
 
     // Admin user
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO users (matric_no, password, display_name, role, is_first_login)
-      VALUES (?, ?, ?, 'admin', 0)
+      VALUES ($1, $2, $3, 'admin', 0)
     `).run('240805099', 'admin', 'Admin');
 
     console.log('Database seeded.\n');
