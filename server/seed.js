@@ -2,8 +2,8 @@ import db from './db.js';
 
 console.log('Seeding database...');
 
-// Check if admin user already exists
-const existingAdmin = db.prepare('SELECT id FROM users WHERE matric_no = ?').get('240805099');
+// Check if any admin user already exists
+const existingAdmin = db.prepare('SELECT id FROM users WHERE role = ?').get('admin');
 
 if (existingAdmin) {
     console.log('Admin user already exists. Skipping seed.');
