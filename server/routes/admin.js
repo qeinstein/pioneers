@@ -90,6 +90,27 @@ router.put('/users/:id/reset-password', verifyToken, requireAdmin, (req, res) =>
     }
 });
 
+// DELETE /api/admin/users/:id
+router.delete('/users/:id', verifyToken, requireAdmin, (req, res) => {
+    try {
+        const user = db.prepare('SELECT id, display_name, matric_no, role FROM users WHERE id = ?').get(req.params.id);
+        if (!user) return res.status(404).json({ error: 'User not found' });
+
+        // Prevent deleting the last admin
+        const adminCount = db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('admin');
+        if (user.role === 'admin' && adminCount.count <= 1) {
+            return res.status(400).json({ error: 'Cannot delete the last admin user' });
+        }
+
+        // Delete user (cascading deletes will handle related data)
+        db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+
+        res.json({ message: `User ${user.display_name || user.matric_no} deleted successfully` });
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // GET /api/admin/allowed-matrics
 router.get('/allowed-matrics', verifyToken, requireAdmin, (req, res) => {
     try {

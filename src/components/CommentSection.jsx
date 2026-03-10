@@ -49,7 +49,7 @@ export default function CommentSection({ quizId }) {
                             <div className="avatar avatar-sm">{c.profile_pic_url ? <img src={c.profile_pic_url} alt="" /> : initials(c.display_name)}</div>
                             <div style={{ flex: 1 }}>
                                 <div className="flex items-center gap-2">
-                                    <span style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{c.display_name || c.matric_no}</span>
+                                    <span style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{c.display_name}</span>
                                     <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>{new Date(c.created_at).toLocaleDateString()}</span>
                                 </div>
                                 <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)', marginTop: 'var(--space-1)' }}>{c.text}</p>

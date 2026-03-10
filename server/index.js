@@ -55,32 +55,16 @@ function ensureAdminUser() {
 
 // Run admin check on startup
 // Only run seed if database is empty (first time setup)
-// BUT: Only do this if we're NOT on Render (to prevent accidental wipes)
-if (!process.env.RENDER) {
-    try {
-        const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-        if (userCount === 0) {
-            console.log('Database is empty. Running seed...');
-            ensureAdminUser();
-        } else {
-            console.log(`Database has ${userCount} users. Skipping seed.`);
-        }
-    } catch (err) {
-        console.error('Error checking database:', err);
+try {
+    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+    if (userCount === 0) {
+        console.log('Database is empty. Running seed...');
+        ensureAdminUser();
+    } else {
+        console.log(`Database has ${userCount} users. Skipping seed.`);
     }
-} else {
-    // On Render, just check for admin existence without seeding
-    try {
-        const adminCount = db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('admin');
-        if (adminCount.count === 0) {
-            console.log('WARNING: No admin user found on Render! Database might be empty.');
-            console.log('To fix: Run "node server/seed.js" manually in Render shell or use Render CLI.');
-        } else {
-            console.log(`Found ${adminCount.count} admin user(s). Database is OK.`);
-        }
-    } catch (err) {
-        console.error('Error checking database:', err);
-    }
+} catch (err) {
+    console.error('Error checking database:', err);
 }
 
 // Logging

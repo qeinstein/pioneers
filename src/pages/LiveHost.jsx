@@ -75,7 +75,7 @@ export default function LiveHost() {
                         </div>
                         <div className="flex flex-wrap gap-2 justify-center">
                             {participants.map(p => (
-                                <div key={p.user_id} className="badge badge-info">{p.display_name || p.matric_no}</div>
+                                <div key={p.user_id} className="badge badge-info">{p.display_name}</div>
                             ))}
                             {participants.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>Waiting for players...</span>}
                         </div>
@@ -172,7 +172,7 @@ export default function LiveHost() {
                         <div key={p.user_id} className="flex items-center justify-between" style={{ padding: 'var(--space-2) var(--space-3)', borderRadius: 'var(--radius-md)', background: i < 3 ? 'var(--bg-input)' : 'transparent', marginBottom: 'var(--space-1)' }}>
                             <div className="flex items-center gap-3">
                                 <span style={{ fontWeight: 700, fontSize: 'var(--font-sm)', color: i === 0 ? 'var(--warning)' : 'var(--text-muted)', width: '24px' }}>#{i + 1}</span>
-                                <span style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{p.display_name || p.matric_no}</span>
+                                <span style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{p.display_name}</span>
                             </div>
                             <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-sm)' }}>{p.total_score}</span>
                         </div>
@@ -204,7 +204,7 @@ export default function LiveHost() {
                                 <span style={{ fontWeight: 700, fontSize: 'var(--font-sm)', color: i === 0 ? 'var(--warning)' : i < 3 ? 'var(--text-secondary)' : 'var(--text-muted)', width: '24px' }}>
                                     {i === 0 ? '1st' : i === 1 ? '2nd' : i === 2 ? '3rd' : `#${i + 1}`}
                                 </span>
-                                <span style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{p.display_name || p.matric_no}</span>
+                                <span style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{p.display_name}</span>
                             </div>
                             <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)' }}>{p.total_score} pts</span>
                         </div>
