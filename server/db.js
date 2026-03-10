@@ -6,8 +6,11 @@ import fs from 'fs';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// On Render, we mount a persistent disk to /data. Locally, use the server folder.
-const dbPath = process.env.RENDER ? '/data/quiz_portal.db' : join(__dirname, 'quiz_portal.db');
+// On Render, we mount a persistent disk to /opt/render/project/src/storage
+// Locally, use the server folder
+const dbPath = process.env.RENDER 
+  ? join('/opt/render/project/src/storage', 'quiz_portal.db') 
+  : join(__dirname, 'quiz_portal.db');
 
 // Ensure the directory exists before creating the database
 if (process.env.RENDER) {
