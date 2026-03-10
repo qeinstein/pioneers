@@ -12,6 +12,8 @@ const dbPath = process.env.RENDER
   ? join('/opt/render/project/src/storage', 'quiz_portal.db') 
   : join(__dirname, 'quiz_portal.db');
 
+console.log(`Database path: ${dbPath}`);
+
 // Ensure the directory exists before creating the database
 if (process.env.RENDER) {
   const dbDir = dirname(dbPath);
@@ -48,7 +50,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS allowed_matrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     matric_no TEXT UNIQUE NOT NULL,
-    added_by INTEGER REFERENCES users(id),
+    added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
@@ -57,14 +59,14 @@ db.exec(`
     course_code TEXT NOT NULL,
     course_name TEXT NOT NULL,
     description TEXT DEFAULT '',
-    created_by INTEGER REFERENCES users(id),
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS quizzes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
-    created_by INTEGER NOT NULL REFERENCES users(id),
+    created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     description TEXT DEFAULT '',
     tags TEXT DEFAULT '[]',
@@ -87,7 +89,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
     score INTEGER NOT NULL,
     total_questions INTEGER NOT NULL,
@@ -98,14 +100,14 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS comments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     text TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS suggestions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     text TEXT NOT NULL,
     status TEXT DEFAULT 'open' CHECK(status IN ('open', 'reviewed')),
@@ -114,7 +116,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS bookmarks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
     created_at TEXT DEFAULT (datetime('now')),
     UNIQUE(user_id, quiz_id)
@@ -122,7 +124,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS achievements (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     badge_type TEXT NOT NULL,
     earned_at TEXT DEFAULT (datetime('now')),
     UNIQUE(user_id, badge_type)
@@ -130,7 +132,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS streaks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
+    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     current_streak INTEGER DEFAULT 0,
     longest_streak INTEGER DEFAULT 0,
     last_activity_date TEXT DEFAULT ''
@@ -138,7 +140,7 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     type TEXT NOT NULL,
     message TEXT NOT NULL,
     reference_id INTEGER DEFAULT NULL,
@@ -148,17 +150,17 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS pending_role_changes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     new_role TEXT NOT NULL,
-    requested_by INTEGER NOT NULL REFERENCES users(id),
+    requested_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     status TEXT DEFAULT 'pending' CHECK(status IN ('pending', 'accepted', 'declined')),
     created_at TEXT DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS live_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    quiz_id INTEGER NOT NULL REFERENCES quizzes(id),
-    host_id INTEGER NOT NULL REFERENCES users(id),
+    quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+    host_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     session_code TEXT UNIQUE NOT NULL,
     status TEXT DEFAULT 'waiting' CHECK(status IN ('waiting', 'active', 'finished')),
     current_question INTEGER DEFAULT 0,
@@ -169,7 +171,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS live_participants (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     total_score INTEGER DEFAULT 0,
     total_time INTEGER DEFAULT 0,
     streak INTEGER DEFAULT 0,
@@ -179,8 +181,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS live_answers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    question_id INTEGER NOT NULL REFERENCES questions(id),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
     answer TEXT,
     time_ms INTEGER DEFAULT 0,
     is_correct INTEGER DEFAULT 0,

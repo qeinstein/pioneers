@@ -54,7 +54,18 @@ function ensureAdminUser() {
 }
 
 // Run admin check on startup
-ensureAdminUser();
+// Only run seed if database is empty (first time setup)
+try {
+    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+    if (userCount === 0) {
+        console.log('Database is empty. Running seed...');
+        ensureAdminUser();
+    } else {
+        console.log(`Database has ${userCount} users. Skipping seed.`);
+    }
+} catch (err) {
+    console.error('Error checking database:', err);
+}
 
 // Logging
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
