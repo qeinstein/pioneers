@@ -7,7 +7,7 @@ import { Server } from 'socket.io';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-import './db.js';
+import db from './db.js';
 import { setupLiveSocket } from './liveSocket.js';
 import authRoutes from './routes/auth.js';
 import courseRoutes from './routes/courses.js';
@@ -33,6 +33,28 @@ const PORT = process.env.PORT || 3001;
 
 // Trust proxy for correct client IP detection behind reverse proxies (like Render)
 app.set('trust proxy', 1);
+
+// Auto-create admin user if none exists
+function ensureAdminUser() {
+    try {
+        const adminCount = db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('admin');
+        if (adminCount.count === 0) {
+            console.log('No admin user found. Creating default admin...');
+            db.prepare(`
+                INSERT INTO users (matric_no, password, display_name, role, is_first_login)
+                VALUES (?, ?, ?, 'admin', 0)
+            `).run('240805099', 'admin', 'Admin');
+            console.log('Default admin created: 240805099 / admin');
+        } else {
+            console.log(`Found ${adminCount.count} admin user(s). Skipping creation.`);
+        }
+    } catch (err) {
+        console.error('Error ensuring admin user:', err);
+    }
+}
+
+// Run admin check on startup
+ensureAdminUser();
 
 // Logging
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
@@ -65,6 +87,24 @@ app.use('/api/live', liveRoutes);
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Internal pinging for uptime (prevents free Render app from sleeping)
+// Only run on Render (where PORT is set)
+if (process.env.RENDER) {
+    const https = require('https');
+    const PING_URL = `https://pioneers-cq56.onrender.com/api/health`;
+    const PING_INTERVAL = 20 * 1000; // 20 seconds
+
+    setInterval(() => {
+        https.get(PING_URL, (res) => {
+            console.log(`[Uptime Ping] ${new Date().toISOString()} - Status: ${res.statusCode}`);
+        }).on('error', (err) => {
+            console.error('[Uptime Ping] Error:', err.message);
+        });
+    }, PING_INTERVAL);
+
+    console.log(`Internal uptime pinger started: pinging ${PING_URL} every 20 seconds`);
+}
 
 // SPA fallback — serve index.html for all non-API routes (production)
 app.get('*', (req, res) => {
