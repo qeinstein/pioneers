@@ -31,6 +31,9 @@ const io = new Server(httpServer, {
 
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy for correct client IP detection behind reverse proxies (like Render)
+app.set('trust proxy', 1);
+
 // Logging
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
 
