@@ -91,19 +91,20 @@ app.get('/api/health', (req, res) => {
 // Internal pinging for uptime (prevents free Render app from sleeping)
 // Only run on Render (where PORT is set)
 if (process.env.RENDER) {
-    const https = require('https');
-    const PING_URL = `https://pioneers-cq56.onrender.com/api/health`;
-    const PING_INTERVAL = 20 * 1000; // 20 seconds
+    import('https').then(https => {
+        const PING_URL = `https://pioneers-cq56.onrender.com/api/health`;
+        const PING_INTERVAL = 20 * 1000; // 20 seconds
 
-    setInterval(() => {
-        https.get(PING_URL, (res) => {
-            console.log(`[Uptime Ping] ${new Date().toISOString()} - Status: ${res.statusCode}`);
-        }).on('error', (err) => {
-            console.error('[Uptime Ping] Error:', err.message);
-        });
-    }, PING_INTERVAL);
+        setInterval(() => {
+            https.get(PING_URL, (res) => {
+                console.log(`[Uptime Ping] ${new Date().toISOString()} - Status: ${res.statusCode}`);
+            }).on('error', (err) => {
+                console.error('[Uptime Ping] Error:', err.message);
+            });
+        }, PING_INTERVAL);
 
-    console.log(`Internal uptime pinger started: pinging ${PING_URL} every 20 seconds`);
+        console.log(`Internal uptime pinger started: pinging ${PING_URL} every 20 seconds`);
+    });
 }
 
 // SPA fallback — serve index.html for all non-API routes (production)
