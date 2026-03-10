@@ -9,6 +9,7 @@
     "server": "node server/index.js",
     "start": "node server/index.js",
     "seed": "node server/seed.js",
+    "setup-admin": "node server/setup-admin.js",
     "build": "vite build",
     "preview": "vite preview"
   },

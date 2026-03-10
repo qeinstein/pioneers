@@ -3,10 +3,15 @@ import db from './db.js';
 console.log('Seeding database...');
 
 // Clear all data
+// Note: We must delete in reverse order of dependencies to avoid FOREIGN KEY constraint failures
 db.exec(`
+  DELETE FROM live_answers;
+  DELETE FROM live_participants;
+  DELETE FROM live_sessions;
+  DELETE FROM pending_role_changes;
   DELETE FROM notifications;
-  DELETE FROM achievements;
   DELETE FROM streaks;
+  DELETE FROM achievements;
   DELETE FROM bookmarks;
   DELETE FROM comments;
   DELETE FROM suggestions;
