@@ -13,6 +13,7 @@ const dbPath = process.env.RENDER
   : join(__dirname, 'quiz_portal.db');
 
 console.log(`Database path: ${dbPath}`);
+console.log(`Render persistent disk: ${process.env.RENDER ? 'Yes' : 'No'}`);
 
 // Ensure the directory exists before creating the database
 if (process.env.RENDER) {
