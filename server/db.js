@@ -13,7 +13,14 @@ const dbPath = process.env.RENDER ? '/data/quiz_portal.db' : join(__dirname, 'qu
 if (process.env.RENDER) {
   const dbDir = dirname(dbPath);
   if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true });
+    try {
+      fs.mkdirSync(dbDir, { recursive: true });
+    } catch (err) {
+      // If permission denied, the directory might already exist or be managed by Render
+      if (err.code !== 'EEXIST') {
+        console.error('Failed to create database directory:', err);
+      }
+    }
   }
 }
 
