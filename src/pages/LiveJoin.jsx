@@ -3,6 +3,45 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
 
+// Component for individual quiz setup in the list
+function QuizSetupItem({ quiz, onCreate, disabled }) {
+    const [duration, setDuration] = useState(20);
+    
+    return (
+        <div style={{
+            padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-color)', marginBottom: 'var(--space-2)',
+            background: 'var(--bg-card)',
+        }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--space-2)' }}>
+                <div>
+                    <div style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{quiz.title}</div>
+                    <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>{quiz.course_code} — {quiz.question_count || '?'} questions</div>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                    <label style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Time/Question:</label>
+                    <input 
+                        type="number" 
+                        min="5" 
+                        max="60" 
+                        value={duration} 
+                        onChange={e => setDuration(parseInt(e.target.value) || 20)}
+                        style={{ width: '50px', padding: '4px 8px', textAlign: 'center' }}
+                        disabled={disabled}
+                    />
+                    <button 
+                        className="btn btn-primary btn-sm" 
+                        onClick={() => onCreate(quiz.id, duration)}
+                        disabled={disabled}
+                    >
+                        Host
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function LiveJoin() {
     const params = useParams();
     const navigate = useNavigate();
@@ -136,13 +175,13 @@ export default function LiveJoin() {
         setLoadingQuizzes(false);
     }
 
-    async function createSession(quizId) {
+    async function createSession(quizId, duration = 20) {
         setCreating(true);
         try {
             const res = await fetch('/api/live/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ quiz_id: quizId, question_duration: 20 }),
+                body: JSON.stringify({ quiz_id: quizId, question_duration: duration }),
             });
             const data = await res.json();
             if (res.ok) {
@@ -158,7 +197,7 @@ export default function LiveJoin() {
     if (phase === 'enter-code' || (phase === 'joining' && !session)) {
         return (
             <div className="page-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}>
-                <div className="card-static animate-scale-in" style={{ maxWidth: '480px', width: '100%', textAlign: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)' }}>
+                <div className="card-static animate-scale-in" style={{ maxWidth: '500px', width: '100%', textAlign: 'center', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)' }}>
                     <h1 style={{ fontSize: 'var(--font-2xl)', fontWeight: 700, marginBottom: 'var(--space-2)' }}>Live Quiz</h1>
                     <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)', marginBottom: 'var(--space-6)' }}>Join a session or create your own</p>
 
@@ -195,18 +234,9 @@ export default function LiveJoin() {
                                     No approved quizzes available. Create one first.
                                 </div>
                             ) : (
-                                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                                <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                                     {quizzes.map(q => (
-                                        <div key={q.id} onClick={() => !creating && createSession(q.id)} style={{
-                                            padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', cursor: creating ? 'wait' : 'pointer',
-                                            border: '1px solid var(--border-color)', marginBottom: 'var(--space-2)',
-                                            transition: 'background var(--transition-fast)',
-                                        }}
-                                            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card-hover)'}
-                                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                                            <div style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{q.title}</div>
-                                            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>{q.course_code} — {q.question_count || '?'} questions</div>
-                                        </div>
+                                        <QuizSetupItem key={q.id} quiz={q} onCreate={createSession} disabled={creating} />
                                     ))}
                                 </div>
                             )}

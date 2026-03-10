@@ -13,6 +13,7 @@ export default function QuizBank() {
     const [bookmarks, setBookmarks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [allTags, setAllTags] = useState([]);
+    const [liveMode, setLiveMode] = useState(false); // New state for live quiz filtering
 
     useEffect(() => {
         Promise.all([
@@ -31,6 +32,9 @@ export default function QuizBank() {
         if (search) params.set('search', search);
         if (courseFilter) params.set('course_id', courseFilter);
         if (tagFilter) params.set('tag', tagFilter);
+        // If in live mode, only fetch approved quizzes
+        if (liveMode) params.set('status', 'approved');
+        
         const res = await fetch(`/api/quizzes?${params}`, { headers: { Authorization: `Bearer ${token}` } });
         const data = await res.json();
         setQuizzes(data);
@@ -44,7 +48,7 @@ export default function QuizBank() {
     useEffect(() => {
         const timer = setTimeout(fetchQuizzes, 300);
         return () => clearTimeout(timer);
-    }, [search, courseFilter, tagFilter]);
+    }, [search, courseFilter, tagFilter, liveMode]);
 
     const displayQuizzes = showBookmarks ? bookmarks : quizzes;
 
@@ -65,10 +69,20 @@ export default function QuizBank() {
                     <option value="">All Courses</option>
                     {courses.map(c => <option key={c.id} value={c.id}>{c.course_code}</option>)}
                 </select>
-                <button className={`btn ${showBookmarks ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                    onClick={() => setShowBookmarks(!showBookmarks)}>
-                    {showBookmarks ? 'Showing Saved' : 'Saved'}
-                </button>
+                <div className="btn-group">
+                    <button className={`btn ${!liveMode && !showBookmarks ? 'btn-primary' : 'btn-ghost'} btn-sm`}
+                        onClick={() => { setLiveMode(false); setShowBookmarks(false); }}>
+                        All Quizzes
+                    </button>
+                    <button className={`btn ${liveMode ? 'btn-primary' : 'btn-ghost'} btn-sm`}
+                        onClick={() => { setLiveMode(true); setShowBookmarks(false); }}>
+                        Live Quiz
+                    </button>
+                    <button className={`btn ${showBookmarks ? 'btn-primary' : 'btn-ghost'} btn-sm`}
+                        onClick={() => setShowBookmarks(!showBookmarks)}>
+                        Saved
+                    </button>
+                </div>
             </div>
 
             {allTags.length > 0 && !showBookmarks && (
