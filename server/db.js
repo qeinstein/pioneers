@@ -50,6 +50,7 @@ export default db;
 // Create tables if they don't exist (PostgreSQL syntax)
 const createTables = async () => {
   try {
+    // Create users table first (others depend on it)
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -62,14 +63,20 @@ const createTables = async () => {
         is_first_login INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    // Create allowed_matrics table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS allowed_matrics (
         id SERIAL PRIMARY KEY,
         matric_no TEXT UNIQUE NOT NULL,
         added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    // Create courses table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS courses (
         id SERIAL PRIMARY KEY,
         course_code TEXT NOT NULL,
@@ -78,7 +85,10 @@ const createTables = async () => {
         created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    // Create quizzes table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS quizzes (
         id SERIAL PRIMARY KEY,
         course_id INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
@@ -90,7 +100,10 @@ const createTables = async () => {
         times_taken INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    // Create questions table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS questions (
         id SERIAL PRIMARY KEY,
         quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
@@ -151,70 +164,87 @@ const createTables = async () => {
         user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         current_streak INTEGER DEFAULT 0,
         longest_streak INTEGER DEFAULT 0,
-    last_activity_date TEXT DEFAULT ''
-  );
+        last_activity_date TEXT DEFAULT ''
+      );
+    `);
 
-  CREATE TABLE IF NOT EXISTS notifications (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    type TEXT NOT NULL,
-    message TEXT NOT NULL,
-    reference_id INTEGER DEFAULT NULL,
-    is_read INTEGER DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
+    // Create notifications table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        reference_id INTEGER DEFAULT NULL,
+        is_read INTEGER DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
-  CREATE TABLE IF NOT EXISTS pending_role_changes (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    new_role TEXT NOT NULL,
-    requested_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
+    // Create pending_role_changes table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pending_role_changes (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        new_role TEXT NOT NULL,
+        requested_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
-  CREATE TABLE IF NOT EXISTS live_sessions (
-    id SERIAL PRIMARY KEY,
-    quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
-    host_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    session_code TEXT UNIQUE NOT NULL,
-    status TEXT DEFAULT 'waiting' CHECK (status IN ('waiting', 'active', 'finished')),
-    current_question INTEGER DEFAULT 0,
-    question_duration INTEGER DEFAULT 20,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-  );
+    // Create live_sessions table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS live_sessions (
+        id SERIAL PRIMARY KEY,
+        quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
+        host_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        session_code TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'waiting' CHECK (status IN ('waiting', 'active', 'finished')),
+        current_question INTEGER DEFAULT 0,
+        question_duration INTEGER DEFAULT 20,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
 
-  CREATE TABLE IF NOT EXISTS live_participants (
-    id SERIAL PRIMARY KEY,
-    session_id INTEGER NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    total_score INTEGER DEFAULT 0,
-    total_time INTEGER DEFAULT 0,
-    streak INTEGER DEFAULT 0,
-    UNIQUE(session_id, user_id)
-  );
+    // Create live_participants table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS live_participants (
+        id SERIAL PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        total_score INTEGER DEFAULT 0,
+        total_time INTEGER DEFAULT 0,
+        streak INTEGER DEFAULT 0,
+        UNIQUE(session_id, user_id)
+      );
+    `);
 
-  CREATE TABLE IF NOT EXISTS live_answers (
-    id SERIAL PRIMARY KEY,
-    session_id INTEGER NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
-    answer TEXT,
-    time_ms INTEGER DEFAULT 0,
-    is_correct INTEGER DEFAULT 0,
-    points INTEGER DEFAULT 0
-  );
+    // Create live_answers table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS live_answers (
+        id SERIAL PRIMARY KEY,
+        session_id INTEGER NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        question_id INTEGER NOT NULL REFERENCES questions(id) ON DELETE CASCADE,
+        answer TEXT,
+        time_ms INTEGER DEFAULT 0,
+        is_correct INTEGER DEFAULT 0,
+        points INTEGER DEFAULT 0
+      );
+    `);
 
-  -- Performance indexes for 400-student scale
-  CREATE INDEX IF NOT EXISTS idx_attempts_user ON attempts(user_id);
-  CREATE INDEX IF NOT EXISTS idx_attempts_quiz ON attempts(quiz_id);
-  CREATE INDEX IF NOT EXISTS idx_questions_quiz ON questions(quiz_id);
-  CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
-  CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);
-  CREATE INDEX IF NOT EXISTS idx_comments_quiz ON comments(quiz_id);
-  CREATE INDEX IF NOT EXISTS idx_live_participants_session ON live_participants(session_id);
-  CREATE INDEX IF NOT EXISTS idx_live_answers_session ON live_answers(session_id, question_id);
-  CREATE INDEX IF NOT EXISTS idx_pending_role_user ON pending_role_changes(user_id, status);
+    // Create indexes
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_attempts_user ON attempts(user_id);
+      CREATE INDEX IF NOT EXISTS idx_attempts_quiz ON attempts(quiz_id);
+      CREATE INDEX IF NOT EXISTS idx_questions_quiz ON questions(quiz_id);
+      CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
+      CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);
+      CREATE INDEX IF NOT EXISTS idx_comments_quiz ON comments(quiz_id);
+      CREATE INDEX IF NOT EXISTS idx_live_participants_session ON live_participants(session_id);
+      CREATE INDEX IF NOT EXISTS idx_live_answers_session ON live_answers(session_id, question_id);
+      CREATE INDEX IF NOT EXISTS idx_pending_role_user ON pending_role_changes(user_id, status);
     `);
   } catch (err) {
     console.error('Error creating tables:', err);

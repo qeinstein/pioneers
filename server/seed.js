@@ -12,6 +12,8 @@ if (existingAdmin) {
     console.log('');
     console.log('  Students can register after being added to the matric whitelist via Admin Panel.');
 } else {
+    console.log('No admin found. Seeding database...');
+    
     // Clear all data
     // Note: We must delete in reverse order of dependencies to avoid FOREIGN KEY constraint failures
     await db.query(`
