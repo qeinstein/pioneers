@@ -1,4 +1,6 @@
 import pg from 'pg';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 const { Pool } = pg;
 
@@ -17,26 +19,116 @@ pool.on('error', (err) => {
   console.error('Unexpected PostgreSQL error:', err);
 });
 
-// Helper to run queries (mimicking better-sqlite3 interface for easier migration)
+/**
+ * Convert SQLite-style `?` placeholders to PostgreSQL `$1, $2, ...` format.
+ * Handles quoted strings and avoids replacing `?` inside them.
+ */
+function convertPlaceholders(sql) {
+  let index = 0;
+  let result = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+
+  for (let i = 0; i < sql.length; i++) {
+    const char = sql[i];
+    const prev = i > 0 ? sql[i - 1] : '';
+
+    if (char === "'" && !inDoubleQuote && prev !== '\\') {
+      inSingleQuote = !inSingleQuote;
+      result += char;
+    } else if (char === '"' && !inSingleQuote && prev !== '\\') {
+      inDoubleQuote = !inDoubleQuote;
+      result += char;
+    } else if (char === '?' && !inSingleQuote && !inDoubleQuote) {
+      index++;
+      result += `$${index}`;
+    } else {
+      result += char;
+    }
+  }
+
+  return { sql: result, paramCount: index };
+}
+
+/**
+ * Convert SQLite `INSERT OR IGNORE` to PostgreSQL `INSERT ... ON CONFLICT DO NOTHING`.
+ */
+function convertInsertOrIgnore(sql) {
+  return sql.replace(/INSERT\s+OR\s+IGNORE\s+INTO/gi, 'INSERT INTO');
+}
+
+/**
+ * Check if the SQL already has a RETURNING clause.
+ */
+function hasReturning(sql) {
+  return /\bRETURNING\b/i.test(sql);
+}
+
+/**
+ * Check if the SQL is an INSERT statement.
+ */
+function isInsert(sql) {
+  return /^\s*INSERT\s+/i.test(sql);
+}
+
+/**
+ * Check if the original SQL had OR IGNORE (meaning ON CONFLICT DO NOTHING should be added).
+ */
+function hadOrIgnore(originalSql) {
+  return /INSERT\s+OR\s+IGNORE\s+INTO/i.test(originalSql);
+}
+
+/**
+ * Add ON CONFLICT DO NOTHING for INSERT OR IGNORE conversions.
+ * Must be added before RETURNING clause if present.
+ */
+function addOnConflictDoNothing(sql) {
+  if (/ON\s+CONFLICT/i.test(sql)) return sql; // already has it
+  // Insert before RETURNING if present
+  if (hasReturning(sql)) {
+    return sql.replace(/(\bRETURNING\b)/i, 'ON CONFLICT DO NOTHING $1');
+  }
+  return sql.trimEnd().replace(/;?\s*$/, '') + ' ON CONFLICT DO NOTHING';
+}
+
+// Helper to run queries (PostgreSQL-compatible wrapper)
 const db = {
-  prepare: (sql) => {
+  prepare: (originalSql) => {
+    const needsOnConflict = hadOrIgnore(originalSql);
+    let sql = convertInsertOrIgnore(originalSql);
+    const { sql: convertedSql } = convertPlaceholders(sql);
+    sql = convertedSql;
+
+    if (needsOnConflict) {
+      sql = addOnConflictDoNothing(sql);
+    }
+
     return {
-      run: (...params) => {
+      run: async (...params) => {
         // For INSERT, UPDATE, DELETE
-        return pool.query(sql, params.length > 0 ? params : undefined).then(res => ({
-          lastInsertRowid: res.rows[0]?.id || null
-        }));
+        let execSql = sql;
+
+        // For INSERTs, add RETURNING id if not already present, to get lastInsertRowid
+        if (isInsert(execSql) && !hasReturning(execSql)) {
+          execSql = execSql.trimEnd().replace(/;?\s*$/, '') + ' RETURNING id';
+        }
+
+        const res = await pool.query(execSql, params.length > 0 ? params : undefined);
+        return {
+          lastInsertRowid: res.rows && res.rows[0] ? res.rows[0].id : null,
+          changes: res.rowCount,
+        };
       },
-      get: (...params) => {
+      get: async (...params) => {
         // For SELECT single row
-        return pool.query(sql, params.length > 0 ? params : undefined).then(res => {
-          if (res.rows.length === 0) return null;
-          return res.rows[0];
-        });
+        const res = await pool.query(sql, params.length > 0 ? params : undefined);
+        if (res.rows.length === 0) return null;
+        return res.rows[0];
       },
-      all: (...params) => {
+      all: async (...params) => {
         // For SELECT multiple rows
-        return pool.query(sql, params.length > 0 ? params : undefined).then(res => res.rows);
+        const res = await pool.query(sql, params.length > 0 ? params : undefined);
+        return res.rows;
       }
     };
   },

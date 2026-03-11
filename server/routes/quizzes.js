@@ -9,12 +9,12 @@ function sanitize(str) {
     return str.replace(/[<>]/g, '').trim();
 }
 
-function updateStreak(userId) {
+async function updateStreak(userId) {
     const today = new Date().toISOString().split('T')[0];
-    let streak = db.prepare('SELECT * FROM streaks WHERE user_id = ?').get(userId);
+    let streak = await db.prepare('SELECT * FROM streaks WHERE user_id = ?').get(userId);
 
     if (!streak) {
-        db.prepare('INSERT INTO streaks (user_id, current_streak, longest_streak, last_activity_date) VALUES (?, 1, 1, ?)').run(userId, today);
+        await db.prepare('INSERT INTO streaks (user_id, current_streak, longest_streak, last_activity_date) VALUES (?, 1, 1, ?)').run(userId, today);
         return;
     }
 
@@ -27,48 +27,50 @@ function updateStreak(userId) {
     let newStreak = diffDays === 1 ? streak.current_streak + 1 : 1;
     let longest = Math.max(newStreak, streak.longest_streak);
 
-    db.prepare('UPDATE streaks SET current_streak = ?, longest_streak = ?, last_activity_date = ? WHERE user_id = ?')
+    await db.prepare('UPDATE streaks SET current_streak = ?, longest_streak = ?, last_activity_date = ? WHERE user_id = ?')
         .run(newStreak, longest, today, userId);
 
     // Streak achievements
     if (newStreak >= 3) {
-        db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'streak_3');
+        await db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'streak_3');
     }
     if (newStreak >= 7) {
-        db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'streak_7');
+        await db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'streak_7');
     }
 }
 
-function checkAchievements(userId) {
-    const attemptCount = db.prepare('SELECT COUNT(*) as c FROM attempts WHERE user_id = ?').get(userId).c;
+async function checkAchievements(userId) {
+    const attemptCountRow = await db.prepare('SELECT COUNT(*) as c FROM attempts WHERE user_id = ?').get(userId);
+    const attemptCount = attemptCountRow ? Number(attemptCountRow.c) : 0;
 
     if (attemptCount >= 1) {
-        db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'first_quiz');
+        await db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'first_quiz');
     }
     if (attemptCount >= 10) {
-        db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'ten_quizzes');
+        await db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'ten_quizzes');
     }
     if (attemptCount >= 50) {
-        db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'fifty_quizzes');
+        await db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'fifty_quizzes');
     }
 
-    const perfectScore = db.prepare(
+    const perfectScore = await db.prepare(
         'SELECT id FROM attempts WHERE user_id = ? AND score = total_questions LIMIT 1'
     ).get(userId);
     if (perfectScore) {
-        db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'perfect_score');
+        await db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'perfect_score');
     }
 
-    const quizzesCreated = db.prepare(
+    const quizzesCreatedRow = await db.prepare(
         'SELECT COUNT(*) as c FROM quizzes WHERE created_by = ? AND status = ?'
-    ).get(userId, 'approved').c;
+    ).get(userId, 'approved');
+    const quizzesCreated = quizzesCreatedRow ? Number(quizzesCreatedRow.c) : 0;
     if (quizzesCreated >= 1) {
-        db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'quiz_creator');
+        await db.prepare('INSERT OR IGNORE INTO achievements (user_id, badge_type) VALUES (?, ?)').run(userId, 'quiz_creator');
     }
 }
 
 // GET /api/quizzes — quiz bank
-router.get('/', verifyToken, (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
     try {
         const { search, course_id, tag, status } = req.query;
         let query = `
@@ -91,7 +93,7 @@ router.get('/', verifyToken, (req, res) => {
         }
 
         if (search) {
-            query += ' AND (q.title LIKE ? OR q.description LIKE ? OR c.course_code LIKE ?)';
+            query += ' AND (q.title ILIKE ? OR q.description ILIKE ? OR c.course_code ILIKE ?)';
             params.push(`%${search}%`, `%${search}%`, `%${search}%`);
         }
         if (course_id) {
@@ -99,13 +101,13 @@ router.get('/', verifyToken, (req, res) => {
             params.push(course_id);
         }
         if (tag) {
-            query += ' AND q.tags LIKE ?';
+            query += ' AND q.tags ILIKE ?';
             params.push(`%${tag}%`);
         }
 
         query += ' ORDER BY q.created_at DESC';
 
-        const quizzes = db.prepare(query).all(...params);
+        const quizzes = await db.prepare(query).all(...params);
 
         // Calculate difficulty for each quiz
         const result = quizzes.map(q => {
@@ -119,15 +121,15 @@ router.get('/', verifyToken, (req, res) => {
 
         res.json(result);
     } catch (err) {
-        console.error(err);
+        console.error('Get quizzes error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // GET /api/quizzes/my — quizzes created by current user
-router.get('/my', verifyToken, (req, res) => {
+router.get('/my', verifyToken, async (req, res) => {
     try {
-        const quizzes = db.prepare(`
+        const quizzes = await db.prepare(`
       SELECT q.*, c.course_code, c.course_name,
         (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) as question_count,
         (SELECT AVG(CAST(score AS FLOAT) / total_questions * 100) FROM attempts WHERE quiz_id = q.id) as avg_score
@@ -139,14 +141,15 @@ router.get('/my', verifyToken, (req, res) => {
 
         res.json(quizzes.map(q => ({ ...q, tags: JSON.parse(q.tags || '[]') })));
     } catch (err) {
+        console.error('Get my quizzes error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // GET /api/quizzes/:id — quiz detail with questions
-router.get('/:id', verifyToken, (req, res) => {
+router.get('/:id', verifyToken, async (req, res) => {
     try {
-        const quiz = db.prepare(`
+        const quiz = await db.prepare(`
       SELECT q.*, c.course_code, c.course_name, u.display_name as creator_name,
         (SELECT AVG(CAST(score AS FLOAT) / total_questions * 100) FROM attempts WHERE quiz_id = q.id) as avg_score
       FROM quizzes q
@@ -157,7 +160,7 @@ router.get('/:id', verifyToken, (req, res) => {
 
         if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
-        const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ?').all(quiz.id);
+        const questions = await db.prepare('SELECT * FROM questions WHERE quiz_id = ?').all(quiz.id);
 
         let difficulty = 'Medium';
         if (quiz.avg_score !== null) {
@@ -166,11 +169,11 @@ router.get('/:id', verifyToken, (req, res) => {
         }
 
         // Check if bookmarked
-        const bookmark = db.prepare('SELECT id FROM bookmarks WHERE user_id = ? AND quiz_id = ?')
+        const bookmark = await db.prepare('SELECT id FROM bookmarks WHERE user_id = ? AND quiz_id = ?')
             .get(req.user.id, quiz.id);
 
         // User's past attempts
-        const attempts = db.prepare(
+        const attempts = await db.prepare(
             'SELECT score, total_questions, time_spent, created_at FROM attempts WHERE user_id = ? AND quiz_id = ? ORDER BY created_at DESC'
         ).all(req.user.id, quiz.id);
 
@@ -183,12 +186,13 @@ router.get('/:id', verifyToken, (req, res) => {
             my_attempts: attempts,
         });
     } catch (err) {
+        console.error('Get quiz detail error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // POST /api/quizzes — create quiz (everyone)
-router.post('/', verifyToken, (req, res) => {
+router.post('/', verifyToken, async (req, res) => {
     try {
         const { course_id, title, description, tags, questions } = req.body;
         if (!course_id || !title || !questions || !questions.length) {
@@ -197,18 +201,16 @@ router.post('/', verifyToken, (req, res) => {
 
         const status = req.user.role === 'admin' ? 'approved' : 'pending';
 
-        const result = db.prepare(
+        const result = await db.prepare(
             'INSERT INTO quizzes (course_id, created_by, title, description, tags, status) VALUES (?, ?, ?, ?, ?, ?)'
         ).run(course_id, req.user.id, sanitize(title), sanitize(description || ''), JSON.stringify(tags || []), status);
 
         const quizId = result.lastInsertRowid;
 
-        const insertQ = db.prepare(
-            'INSERT INTO questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-        );
-
         for (const q of questions) {
-            insertQ.run(
+            await db.prepare(
+                'INSERT INTO questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            ).run(
                 quizId,
                 sanitize(q.question_text),
                 sanitize(q.option_a),
@@ -222,26 +224,25 @@ router.post('/', verifyToken, (req, res) => {
 
         if (status === 'pending') {
             // Notify admins
-            const admins = db.prepare('SELECT id FROM users WHERE role = ?').all('admin');
-            const notifStmt = db.prepare(
-                'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)'
-            );
+            const admins = await db.prepare('SELECT id FROM users WHERE role = ?').all('admin');
             for (const admin of admins) {
-                notifStmt.run(admin.id, 'quiz_pending', `New quiz "${title}" is pending approval`, quizId);
+                await db.prepare(
+                    'INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)'
+                ).run(admin.id, 'quiz_pending', `New quiz "${title}" is pending approval`, quizId);
             }
         }
 
         res.status(201).json({ id: quizId, status });
     } catch (err) {
-        console.error(err);
+        console.error('Create quiz error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // PUT /api/quizzes/:id — update quiz
-router.put('/:id', verifyToken, (req, res) => {
+router.put('/:id', verifyToken, async (req, res) => {
     try {
-        const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+        const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
         if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
         if (quiz.created_by !== req.user.id && req.user.role !== 'admin') {
@@ -250,7 +251,7 @@ router.put('/:id', verifyToken, (req, res) => {
 
         const { title, description, tags, course_id, questions } = req.body;
 
-        db.prepare(
+        await db.prepare(
             'UPDATE quizzes SET title = COALESCE(?, title), description = COALESCE(?, description), tags = COALESCE(?, tags), course_id = COALESCE(?, course_id) WHERE id = ?'
         ).run(
             title ? sanitize(title) : null,
@@ -261,12 +262,11 @@ router.put('/:id', verifyToken, (req, res) => {
         );
 
         if (questions && questions.length) {
-            db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(req.params.id);
-            const insertQ = db.prepare(
-                'INSERT INTO questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-            );
+            await db.prepare('DELETE FROM questions WHERE quiz_id = ?').run(req.params.id);
             for (const q of questions) {
-                insertQ.run(
+                await db.prepare(
+                    'INSERT INTO questions (quiz_id, question_text, option_a, option_b, option_c, option_d, correct_option, explanation) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+                ).run(
                     req.params.id,
                     sanitize(q.question_text),
                     sanitize(q.option_a),
@@ -281,35 +281,37 @@ router.put('/:id', verifyToken, (req, res) => {
 
         res.json({ message: 'Quiz updated' });
     } catch (err) {
+        console.error('Update quiz error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // DELETE /api/quizzes/:id
-router.delete('/:id', verifyToken, (req, res) => {
+router.delete('/:id', verifyToken, async (req, res) => {
     try {
-        const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
+        const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ?').get(req.params.id);
         if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
         if (quiz.created_by !== req.user.id && req.user.role !== 'admin') {
             return res.status(403).json({ error: 'Not authorized' });
         }
 
-        db.prepare('DELETE FROM quizzes WHERE id = ?').run(req.params.id);
+        await db.prepare('DELETE FROM quizzes WHERE id = ?').run(req.params.id);
         res.json({ message: 'Quiz deleted' });
     } catch (err) {
+        console.error('Delete quiz error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // POST /api/quizzes/:id/attempt — submit quiz answers
-router.post('/:id/attempt', verifyToken, (req, res) => {
+router.post('/:id/attempt', verifyToken, async (req, res) => {
     try {
         const { answers, time_spent } = req.body;
-        const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND status = ?').get(req.params.id, 'approved');
+        const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ? AND status = ?').get(req.params.id, 'approved');
         if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
 
-        const questions = db.prepare('SELECT * FROM questions WHERE quiz_id = ?').all(quiz.id);
+        const questions = await db.prepare('SELECT * FROM questions WHERE quiz_id = ?').all(quiz.id);
 
         let score = 0;
         const results = questions.map(q => {
@@ -330,15 +332,15 @@ router.post('/:id/attempt', verifyToken, (req, res) => {
             };
         });
 
-        db.prepare(
+        await db.prepare(
             'INSERT INTO attempts (user_id, quiz_id, score, total_questions, time_spent) VALUES (?, ?, ?, ?, ?)'
         ).run(req.user.id, quiz.id, score, questions.length, time_spent || 0);
 
-        db.prepare('UPDATE quizzes SET times_taken = times_taken + 1 WHERE id = ?').run(quiz.id);
+        await db.prepare('UPDATE quizzes SET times_taken = times_taken + 1 WHERE id = ?').run(quiz.id);
 
         // Update streak & check achievements
-        updateStreak(req.user.id);
-        checkAchievements(req.user.id);
+        await updateStreak(req.user.id);
+        await checkAchievements(req.user.id);
 
         res.json({
             score,
@@ -348,7 +350,7 @@ router.post('/:id/attempt', verifyToken, (req, res) => {
             results,
         });
     } catch (err) {
-        console.error(err);
+        console.error('Submit attempt error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });

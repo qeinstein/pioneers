@@ -5,9 +5,9 @@ import { verifyToken } from '../middleware/auth.js';
 const router = Router();
 
 // GET /api/leaderboard/global
-router.get('/global', verifyToken, (req, res) => {
+router.get('/global', verifyToken, async (req, res) => {
   try {
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT
         u.id as user_id,
         u.display_name,
@@ -19,7 +19,7 @@ router.get('/global', verifyToken, (req, res) => {
         AVG(CAST(a.score AS FLOAT) / a.total_questions * 100) as avg_score
       FROM attempts a
       JOIN users u ON a.user_id = u.id
-      GROUP BY u.id
+      GROUP BY u.id, u.display_name, u.profile_pic_url, u.matric_no
       ORDER BY best_score DESC, best_time ASC, total_attempts ASC
       LIMIT 50
     `).all();
@@ -33,14 +33,15 @@ router.get('/global', verifyToken, (req, res) => {
 
     res.json(leaderboard);
   } catch (err) {
+    console.error('Global leaderboard error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
 // GET /api/leaderboard/course/:courseId
-router.get('/course/:courseId', verifyToken, (req, res) => {
+router.get('/course/:courseId', verifyToken, async (req, res) => {
   try {
-    const rows = db.prepare(`
+    const rows = await db.prepare(`
       SELECT
         u.id as user_id,
         u.display_name,
@@ -54,7 +55,7 @@ router.get('/course/:courseId', verifyToken, (req, res) => {
       JOIN users u ON a.user_id = u.id
       JOIN quizzes q ON a.quiz_id = q.id
       WHERE q.course_id = ?
-      GROUP BY u.id
+      GROUP BY u.id, u.display_name, u.profile_pic_url, u.matric_no
       ORDER BY best_score DESC, best_time ASC, total_attempts ASC
       LIMIT 50
     `).all(req.params.courseId);
@@ -68,6 +69,7 @@ router.get('/course/:courseId', verifyToken, (req, res) => {
 
     res.json(leaderboard);
   } catch (err) {
+    console.error('Course leaderboard error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

@@ -5,9 +5,9 @@ import { verifyToken } from '../middleware/auth.js';
 const router = Router();
 
 // GET /api/bookmarks
-router.get('/', verifyToken, (req, res) => {
+router.get('/', verifyToken, async (req, res) => {
     try {
-        const bookmarks = db.prepare(`
+        const bookmarks = await db.prepare(`
       SELECT b.id as bookmark_id, b.created_at as bookmarked_at,
         q.*, c.course_code, c.course_name,
         (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) as question_count,
@@ -21,26 +21,29 @@ router.get('/', verifyToken, (req, res) => {
 
         res.json(bookmarks.map(b => ({ ...b, tags: JSON.parse(b.tags || '[]') })));
     } catch (err) {
+        console.error('Get bookmarks error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // POST /api/bookmarks/:quizId
-router.post('/:quizId', verifyToken, (req, res) => {
+router.post('/:quizId', verifyToken, async (req, res) => {
     try {
-        db.prepare('INSERT OR IGNORE INTO bookmarks (user_id, quiz_id) VALUES (?, ?)').run(req.user.id, req.params.quizId);
+        await db.prepare('INSERT OR IGNORE INTO bookmarks (user_id, quiz_id) VALUES (?, ?)').run(req.user.id, req.params.quizId);
         res.status(201).json({ message: 'Bookmarked' });
     } catch (err) {
+        console.error('Add bookmark error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // DELETE /api/bookmarks/:quizId
-router.delete('/:quizId', verifyToken, (req, res) => {
+router.delete('/:quizId', verifyToken, async (req, res) => {
     try {
-        db.prepare('DELETE FROM bookmarks WHERE user_id = ? AND quiz_id = ?').run(req.user.id, req.params.quizId);
+        await db.prepare('DELETE FROM bookmarks WHERE user_id = ? AND quiz_id = ?').run(req.user.id, req.params.quizId);
         res.json({ message: 'Bookmark removed' });
     } catch (err) {
+        console.error('Remove bookmark error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });

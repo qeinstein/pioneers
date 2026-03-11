@@ -12,23 +12,25 @@ function generateCode() {
 }
 
 // POST /api/live/create — create a live session from an existing quiz
-router.post('/create', verifyToken, (req, res) => {
+router.post('/create', verifyToken, async (req, res) => {
     try {
         const { quiz_id, question_duration } = req.body;
-        const quiz = db.prepare('SELECT * FROM quizzes WHERE id = ? AND status = ?').get(quiz_id, 'approved');
+        const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ? AND status = ?').get(quiz_id, 'approved');
         if (!quiz) return res.status(404).json({ error: 'Quiz not found or not approved' });
 
-        const questions = db.prepare('SELECT COUNT(*) as c FROM questions WHERE quiz_id = ?').get(quiz_id);
-        if (questions.c === 0) return res.status(400).json({ error: 'Quiz has no questions' });
+        const questions = await db.prepare('SELECT COUNT(*) as c FROM questions WHERE quiz_id = ?').get(quiz_id);
+        if (Number(questions.c) === 0) return res.status(400).json({ error: 'Quiz has no questions' });
 
         let session_code;
         let attempts = 0;
         do {
             session_code = generateCode();
             attempts++;
-        } while (db.prepare('SELECT id FROM live_sessions WHERE session_code = ? AND status != ?').get(session_code, 'finished') && attempts < 10);
+            const existing = await db.prepare('SELECT id FROM live_sessions WHERE session_code = ? AND status != ?').get(session_code, 'finished');
+            if (!existing) break;
+        } while (attempts < 10);
 
-        const result = db.prepare(
+        const result = await db.prepare(
             'INSERT INTO live_sessions (quiz_id, host_id, session_code, question_duration) VALUES (?, ?, ?, ?)'
         ).run(quiz_id, req.user.id, session_code, question_duration || 20);
 
@@ -38,15 +40,15 @@ router.post('/create', verifyToken, (req, res) => {
             quiz_title: quiz.title,
         });
     } catch (err) {
-        console.error(err);
+        console.error('Create live session error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // GET /api/live/:code — get session info
-router.get('/:code', verifyToken, (req, res) => {
+router.get('/:code', verifyToken, async (req, res) => {
     try {
-        const session = db.prepare(`
+        const session = await db.prepare(`
             SELECT ls.*, q.title as quiz_title, q.description as quiz_description,
                    u.display_name as host_name,
                    (SELECT COUNT(*) FROM questions WHERE quiz_id = ls.quiz_id) as question_count,
@@ -61,17 +63,18 @@ router.get('/:code', verifyToken, (req, res) => {
 
         res.json(session);
     } catch (err) {
+        console.error('Get live session error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // GET /api/live/:code/results — final results
-router.get('/:code/results', verifyToken, (req, res) => {
+router.get('/:code/results', verifyToken, async (req, res) => {
     try {
-        const session = db.prepare('SELECT * FROM live_sessions WHERE session_code = ?').get(req.params.code.toUpperCase());
+        const session = await db.prepare('SELECT * FROM live_sessions WHERE session_code = ?').get(req.params.code.toUpperCase());
         if (!session) return res.status(404).json({ error: 'Session not found' });
 
-        const participants = db.prepare(`
+        const participants = await db.prepare(`
             SELECT lp.*, u.display_name, u.matric_no, u.profile_pic_url
             FROM live_participants lp
             JOIN users u ON lp.user_id = u.id
@@ -81,6 +84,7 @@ router.get('/:code/results', verifyToken, (req, res) => {
 
         res.json({ session, participants });
     } catch (err) {
+        console.error('Get live results error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
