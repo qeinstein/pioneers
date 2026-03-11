@@ -35,7 +35,7 @@ router.post('/login', loginLimiter, async (req, res) => {
         }
 
         const result = await db.prepare('SELECT * FROM users WHERE matric_no = $1').get(matric_no);
-        const user = result.rows ? result.rows[0] : result;
+        const user = result ? (result.rows ? result.rows[0] : result) : null;
         
         if (!user) {
             return res.status(401).json({ error: 'Invalid matric number or password' });
@@ -78,14 +78,14 @@ router.post('/register', async (req, res) => {
         }
 
         const existingResult = await db.prepare('SELECT id FROM users WHERE matric_no = $1').get(matric_no);
-        const existing = existingResult.rows ? existingResult.rows[0] : existingResult;
+        const existing = existingResult ? (existingResult.rows ? existingResult.rows[0] : existingResult) : null;
         
         if (existing) {
             return res.status(409).json({ error: 'Account already exists. Please login.' });
         }
 
         const allowedResult = await db.prepare('SELECT id FROM allowed_matrics WHERE matric_no = $1').get(matric_no);
-        const allowed = allowedResult.rows ? allowedResult.rows[0] : allowedResult;
+        const allowed = allowedResult ? (allowedResult.rows ? allowedResult.rows[0] : allowedResult) : null;
         
         if (!allowed) {
             return res.status(403).json({ error: 'This matric number is not authorized. Contact your admin.' });
@@ -97,7 +97,8 @@ router.post('/register', async (req, res) => {
         ).run(matric_no, password, matric_no);
 
         // Create streak record
-        await db.prepare('INSERT INTO streaks (user_id) VALUES ($1)').run(result.rows[0].id);
+        const newUserId = result.rows ? result.rows[0].id : result.lastInsertRowid;
+        await db.prepare('INSERT INTO streaks (user_id) VALUES ($1)').run(newUserId);
 
         res.status(201).json({ message: 'Account created. Your default password is the last 4 characters of your matric number.' });
     } catch (err) {

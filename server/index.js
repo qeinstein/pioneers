@@ -38,7 +38,7 @@ app.set('trust proxy', 1);
 async function ensureAdminUser() {
     try {
         const adminCountResult = await db.prepare('SELECT COUNT(*) as count FROM users WHERE role = $1').get('admin');
-        const adminCount = adminCountResult.rows ? adminCountResult.rows[0].count : adminCountResult.count;
+        const adminCount = adminCountResult ? (adminCountResult.rows ? adminCountResult.rows[0].count : adminCountResult.count) : 0;
         
         if (adminCount === 0) {
             console.log('No admin user found. Creating default admin...');
@@ -60,7 +60,7 @@ async function ensureAdminUser() {
 (async () => {
     try {
         const userCountResult = await db.prepare('SELECT COUNT(*) as count FROM users').get();
-        const userCount = userCountResult.rows ? userCountResult.rows[0].count : userCountResult.count;
+        const userCount = userCountResult ? (userCountResult.rows ? userCountResult.rows[0].count : userCountResult.count) : 0;
         
         if (userCount === 0) {
             console.log('Database is empty. Running seed...');
