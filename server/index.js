@@ -60,7 +60,8 @@ async function ensureAdminUser() {
 (async () => {
     try {
         const userCountResult = await db.prepare('SELECT COUNT(*) as count FROM users').get();
-        const userCount = userCountResult ? (userCountResult.rows ? userCountResult.rows[0].count : userCountResult.count) : 0;
+        // Handle null result (no rows returned)
+        const userCount = userCountResult ? userCountResult.count : 0;
         
         if (userCount === 0) {
             console.log('Database is empty. Running seed...');

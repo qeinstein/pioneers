@@ -29,7 +29,10 @@ const db = {
       },
       get: (...params) => {
         // For SELECT single row
-        return pool.query(sql, params).then(res => res.rows[0] || null);
+        return pool.query(sql, params).then(res => {
+          if (res.rows.length === 0) return null;
+          return res.rows[0];
+        });
       },
       all: (...params) => {
         // For SELECT multiple rows
