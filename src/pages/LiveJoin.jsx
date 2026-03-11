@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
+import MathText from '../components/MathText';
 
 // Component for individual quiz setup in the list
 function QuizSetupItem({ quiz, onCreate, disabled }) {
     const [duration, setDuration] = useState(20);
-    
+
     return (
         <div style={{
             padding: 'var(--space-3)', borderRadius: 'var(--radius-md)',
@@ -20,17 +21,17 @@ function QuizSetupItem({ quiz, onCreate, disabled }) {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
                     <label style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>Time/Question:</label>
-                    <input 
-                        type="number" 
-                        min="5" 
-                        max="60" 
-                        value={duration} 
+                    <input
+                        type="number"
+                        min="5"
+                        max="60"
+                        value={duration}
                         onChange={e => setDuration(parseInt(e.target.value) || 20)}
                         style={{ width: '50px', padding: '4px 8px', textAlign: 'center' }}
                         disabled={disabled}
                     />
-                    <button 
-                        className="btn btn-primary btn-sm" 
+                    <button
+                        className="btn btn-primary btn-sm"
                         onClick={() => onCreate(quiz.id, duration)}
                         disabled={disabled}
                     >
@@ -287,7 +288,7 @@ export default function LiveJoin() {
                 <div className="progress-bar mb-6"><div className="progress-bar-fill" style={{ width: `${progress}%`, transition: 'width 1s linear' }}></div></div>
 
                 <div className="card-static mb-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-6)', textAlign: 'center' }}>
-                    <h2 style={{ fontSize: 'var(--font-lg)', fontWeight: 600, lineHeight: 1.6 }}>{question.question_text}</h2>
+                    <h2 style={{ fontSize: 'var(--font-lg)', fontWeight: 600, lineHeight: 1.6 }}><MathText text={question.question_text} /></h2>
                 </div>
 
                 {phase === 'answered' && answerResult ? (
@@ -320,7 +321,7 @@ export default function LiveJoin() {
                                     transition: 'all 0.2s ease',
                                 }}>
                                 <div style={{ fontSize: 'var(--font-xl)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>{opt.toUpperCase()}</div>
-                                {question[`option_${opt}`]}
+                                <MathText text={question[`option_${opt}`]} />
                             </button>
                         ))}
                     </div>

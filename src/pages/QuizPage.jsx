@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import CommentSection from '../components/CommentSection';
+import MathText from '../components/MathText';
 
 export default function QuizPage() {
     const { id } = useParams();
@@ -156,7 +157,7 @@ export default function QuizPage() {
                     Question {currentQ + 1} of {questions.length}
                 </div>
                 <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 600, marginBottom: 'var(--space-6)', lineHeight: 1.6 }}>
-                    {question.question_text}
+                    <MathText text={question.question_text} />
                 </h3>
 
                 {['a', 'b', 'c', 'd'].map(opt => (
@@ -165,7 +166,7 @@ export default function QuizPage() {
                         onClick={() => selectAnswer(question.id, opt)}
                     >
                         <div className="quiz-option-label">{opt.toUpperCase()}</div>
-                        <span style={{ flex: 1 }}>{question[`option_${opt}`]}</span>
+                        <span style={{ flex: 1 }}><MathText text={question[`option_${opt}`]} /></span>
                     </div>
                 ))}
             </div>

@@ -23,8 +23,17 @@ export default function ManageUsers() {
     }, []);
 
     async function changeRole(userId, newRole) {
-        await fetch(`/api/admin/users/${userId}/role`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ role: newRole }) });
-        setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+        setMsg('');
+        const res = await fetch(`/api/admin/users/${userId}/role`, { method: 'PUT', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ role: newRole }) });
+        const data = await res.json();
+
+        if (data.status === 'Pending') {
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, pending_admin: true } : u));
+            setMsg(`Invitation sent to ${data.user || 'user'}. They must accept it to become an Admin.`);
+        } else {
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+            setMsg(`Role updated to ${newRole}.`);
+        }
     }
 
     async function resetPassword(userId) {
@@ -77,10 +86,12 @@ export default function ManageUsers() {
                                     <td style={{ fontSize: 'var(--font-xs)' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                                     <td>
                                         <div className="flex gap-2">
-                                            {u.role === 'student' ? (
+                                            {u.role === 'student' && !u.pending_admin ? (
                                                 <button className="btn btn-ghost btn-sm" onClick={() => changeRole(u.id, 'admin')}>Promote</button>
+                                            ) : u.pending_admin ? (
+                                                <span className="badge badge-warning">Pending Invite</span>
                                             ) : u.matric_no !== '240805099' && (
-                                                <button className="btn btn-ghost btn-sm" onClick={() => changeRole(u.id, 'student')}>Demote</button>
+                                                <button className="btn btn-danger btn-sm" onClick={() => changeRole(u.id, 'student')}>Demote</button>
                                             )}
                                             <button className="btn btn-ghost btn-sm" onClick={() => resetPassword(u.id)}>Reset Pass</button>
                                         </div>

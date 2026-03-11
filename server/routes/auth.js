@@ -62,6 +62,7 @@ router.post('/login', loginLimiter, async (req, res) => {
             user: {
                 id: user.id,
                 matric_no: user.matric_no,
+                username: user.username,
                 display_name: user.display_name,
                 bio: user.bio,
                 profile_pic_url: user.profile_pic_url,
@@ -139,7 +140,7 @@ router.post('/change-password', verifyToken, async (req, res) => {
 router.get('/profile', verifyToken, async (req, res) => {
     try {
         const user = await db.prepare(
-            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, is_first_login, created_at FROM users WHERE id = ?'
+            'SELECT id, matric_no, username, display_name, bio, profile_pic_url, role, is_first_login, created_at FROM users WHERE id = ?'
         ).get(req.user.id);
 
         if (!user) return res.status(404).json({ error: 'User not found' });
@@ -171,7 +172,7 @@ router.get('/profile', verifyToken, async (req, res) => {
 router.get('/profile/:userId', verifyToken, async (req, res) => {
     try {
         const user = await db.prepare(
-            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, created_at FROM users WHERE id = ?'
+            'SELECT id, matric_no, username, display_name, bio, profile_pic_url, role, created_at FROM users WHERE id = ?'
         ).get(req.params.userId);
 
         if (!user) return res.status(404).json({ error: 'User not found' });
@@ -219,12 +220,40 @@ router.put('/profile', verifyToken, async (req, res) => {
             .run(display_name, bio, req.user.id);
 
         const user = await db.prepare(
-            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, is_first_login FROM users WHERE id = ?'
+            'SELECT id, matric_no, username, display_name, bio, profile_pic_url, role, is_first_login FROM users WHERE id = ?'
         ).get(req.user.id);
 
         res.json({ ...user, is_first_login: user.is_first_login === 1 });
     } catch (err) {
         console.error('Update profile error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// PUT /api/auth/username
+router.put('/username', verifyToken, async (req, res) => {
+    try {
+        let { username } = req.body;
+        if (!username || username.trim().length < 3) {
+            return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
+        }
+        username = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+        // Check if taken
+        const existing = await db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+        if (existing) {
+            return res.status(409).json({ error: 'Username is already taken.' });
+        }
+
+        await db.prepare('UPDATE users SET username = ? WHERE id = ?').run(username, req.user.id);
+
+        const user = await db.prepare(
+            'SELECT id, matric_no, username, display_name, bio, profile_pic_url, role, is_first_login FROM users WHERE id = ?'
+        ).get(req.user.id);
+
+        res.json({ ...user, is_first_login: user.is_first_login === 1 });
+    } catch (err) {
+        console.error('Update username error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
