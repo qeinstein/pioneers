@@ -56,7 +56,7 @@ async function ensureAdminUser() {
 }
 
 // Run admin check on startup
-// Only run seed if no admin exists (not if database is empty)
+// Only run seed if no ad min exists (not if database is empty)
 (async () => {
     try {
         console.log('Checking for admin users...');
