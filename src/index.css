@@ -476,7 +476,7 @@ img {
   flex-direction: column;
   z-index: 100;
   transition: width var(--transition-base), transform var(--transition-base);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .sidebar.collapsed {
@@ -714,6 +714,10 @@ img {
     transform: translateX(0);
   }
 
+  .desktop-collapse-btn {
+    display: none !important;
+  }
+
   .sidebar.collapsed~.main-content {
     margin-left: 0;
   }
@@ -753,7 +757,8 @@ img {
   /* Ensure forms and inputs are mobile-friendly */
   .form-input,
   .form-select {
-    font-size: 16px !important; /* Prevents zoom on iOS */
+    font-size: 16px !important;
+    /* Prevents zoom on iOS */
     padding: 12px 16px !important;
   }
 
@@ -1492,9 +1497,20 @@ img {
     border-radius: var(--radius-lg);
   }
 
-  h1, .h1 { font-size: 1.5rem !important; }
-  h2, .h2 { font-size: 1.25rem !important; }
-  h3, .h3 { font-size: 1.1rem !important; }
+  h1,
+  .h1 {
+    font-size: 1.5rem !important;
+  }
+
+  h2,
+  .h2 {
+    font-size: 1.25rem !important;
+  }
+
+  h3,
+  .h3 {
+    font-size: 1.1rem !important;
+  }
 }
 
 /* ========== FLEX ========== */
