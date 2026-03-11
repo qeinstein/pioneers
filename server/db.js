@@ -23,20 +23,20 @@ const db = {
     return {
       run: (...params) => {
         // For INSERT, UPDATE, DELETE
-        return pool.query(sql, params).then(res => ({
-          lastInsertRowid: res.rows[0]?.id || res.rows[0]?.lastInsertId || null
+        return pool.query(sql, ...params).then(res => ({
+          lastInsertRowid: res.rows[0]?.id || null
         }));
       },
       get: (...params) => {
         // For SELECT single row
-        return pool.query(sql, params).then(res => {
+        return pool.query(sql, ...params).then(res => {
           if (res.rows.length === 0) return null;
           return res.rows[0];
         });
       },
       all: (...params) => {
         // For SELECT multiple rows
-        return pool.query(sql, params).then(res => res.rows);
+        return pool.query(sql, ...params).then(res => res.rows);
       }
     };
   },
@@ -118,7 +118,10 @@ const createTables = async () => {
         correct_option TEXT NOT NULL CHECK (correct_option IN ('a', 'b', 'c', 'd')),
         explanation TEXT DEFAULT ''
       );
+    `);
 
+    // Create attempts table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS attempts (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -128,7 +131,10 @@ const createTables = async () => {
         time_spent INTEGER NOT NULL DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    // Create comments table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS comments (
         id SERIAL PRIMARY KEY,
         quiz_id INTEGER NOT NULL REFERENCES quizzes(id) ON DELETE CASCADE,
@@ -136,7 +142,10 @@ const createTables = async () => {
         text TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    // Create suggestions table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS suggestions (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -145,7 +154,10 @@ const createTables = async () => {
         status TEXT DEFAULT 'open' CHECK (status IN ('open', 'reviewed')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    // Create bookmarks table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS bookmarks (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -153,7 +165,10 @@ const createTables = async () => {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, quiz_id)
       );
+    `);
 
+    // Create achievements table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS achievements (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -161,7 +176,10 @@ const createTables = async () => {
         earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(user_id, badge_type)
       );
+    `);
 
+    // Create streaks table
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS streaks (
         id SERIAL PRIMARY KEY,
         user_id INTEGER UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
