@@ -38,7 +38,7 @@ app.set('trust proxy', 1);
 async function ensureAdminUser() {
     try {
         const adminCountResult = await db.prepare('SELECT COUNT(*) as count FROM users WHERE role = $1').get('admin');
-        const adminCount = adminCountResult ? Number(adminCountResult.count)t.count) : 0;
+        const adminCount = adminCountResult && adminCountResult.count !== undefined && adminCountResult.count !== undefined ? Number(adminCountResult.count) : 0;
         
         if (adminCount === 0) {
             console.log('No admin user found. Creating default admin...');
