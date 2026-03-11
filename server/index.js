@@ -56,18 +56,17 @@ async function ensureAdminUser() {
 }
 
 // Run admin check on startup
-// Only run seed if database is empty (first time setup)
+// Only run seed if no admin exists (not if database is empty)
 (async () => {
     try {
-        const userCountResult = await db.prepare('SELECT COUNT(*) as count FROM users').get();
-        // Handle null result (no rows returned)
-        const userCount = userCountResult ? userCountResult.count : 0;
+        const adminCountResult = await db.prepare('SELECT COUNT(*) as count FROM users WHERE role = $1').get('admin');
+        const adminCount = adminCountResult ? adminCountResult.count : 0;
         
-        if (userCount === 0) {
-            console.log('Database is empty. Running seed...');
+        if (adminCount === 0) {
+            console.log('No admin user found. Running seed...');
             await ensureAdminUser();
         } else {
-            console.log(`Database has ${userCount} users. Skipping seed.`);
+            console.log(`Found ${adminCount} admin user(s). Skipping seed.`);
         }
     } catch (err) {
         console.error('Error checking database:', err);
