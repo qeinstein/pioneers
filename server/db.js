@@ -23,20 +23,20 @@ const db = {
     return {
       run: (...params) => {
         // For INSERT, UPDATE, DELETE
-        return pool.query(sql, ...params).then(res => ({
+        return pool.query(sql, params.length > 0 ? params : undefined).then(res => ({
           lastInsertRowid: res.rows[0]?.id || null
         }));
       },
       get: (...params) => {
         // For SELECT single row
-        return pool.query(sql, ...params).then(res => {
+        return pool.query(sql, params.length > 0 ? params : undefined).then(res => {
           if (res.rows.length === 0) return null;
           return res.rows[0];
         });
       },
       all: (...params) => {
         // For SELECT multiple rows
-        return pool.query(sql, ...params).then(res => res.rows);
+        return pool.query(sql, params.length > 0 ? params : undefined).then(res => res.rows);
       }
     };
   },
