@@ -35,18 +35,20 @@ const PORT = process.env.PORT || 3001;
 app.set('trust proxy', 1);
 
 // Auto-create admin user if none exists
-function ensureAdminUser() {
+async function ensureAdminUser() {
     try {
-        const adminCount = db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('admin');
-        if (adminCount.count === 0) {
+        const adminCountResult = await db.prepare('SELECT COUNT(*) as count FROM users WHERE role = $1').get('admin');
+        const adminCount = adminCountResult.rows ? adminCountResult.rows[0].count : adminCountResult.count;
+        
+        if (adminCount === 0) {
             console.log('No admin user found. Creating default admin...');
-            db.prepare(`
+            await db.prepare(`
                 INSERT INTO users (matric_no, password, display_name, role, is_first_login)
-                VALUES (?, ?, ?, 'admin', 0)
+                VALUES ($1, $2, $3, 'admin', 0)
             `).run('240805099', 'admin', 'Admin');
             console.log('Default admin created: 240805099 / admin');
         } else {
-            console.log(`Found ${adminCount.count} admin user(s). Skipping creation.`);
+            console.log(`Found ${adminCount} admin user(s). Skipping creation.`);
         }
     } catch (err) {
         console.error('Error ensuring admin user:', err);
@@ -55,17 +57,21 @@ function ensureAdminUser() {
 
 // Run admin check on startup
 // Only run seed if database is empty (first time setup)
-try {
-    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-    if (userCount === 0) {
-        console.log('Database is empty. Running seed...');
-        ensureAdminUser();
-    } else {
-        console.log(`Database has ${userCount} users. Skipping seed.`);
+(async () => {
+    try {
+        const userCountResult = await db.prepare('SELECT COUNT(*) as count FROM users').get();
+        const userCount = userCountResult.rows ? userCountResult.rows[0].count : userCountResult.count;
+        
+        if (userCount === 0) {
+            console.log('Database is empty. Running seed...');
+            await ensureAdminUser();
+        } else {
+            console.log(`Database has ${userCount} users. Skipping seed.`);
+        }
+    } catch (err) {
+        console.error('Error checking database:', err);
     }
-} catch (err) {
-    console.error('Error checking database:', err);
-}
+})();
 
 // Logging
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));

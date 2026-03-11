@@ -27,14 +27,16 @@ const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
 const router = Router();
 
 // POST /api/auth/login
-router.post('/login', loginLimiter, (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
     try {
         const { matric_no, password } = req.body;
         if (!matric_no || !password) {
             return res.status(400).json({ error: 'Matric number and password are required' });
         }
 
-        const user = db.prepare('SELECT * FROM users WHERE matric_no = ?').get(matric_no);
+        const result = await db.prepare('SELECT * FROM users WHERE matric_no = $1').get(matric_no);
+        const user = result.rows ? result.rows[0] : result;
+        
         if (!user) {
             return res.status(401).json({ error: 'Invalid matric number or password' });
         }
@@ -62,39 +64,44 @@ router.post('/login', loginLimiter, (req, res) => {
             }
         });
     } catch (err) {
+        console.error('Login error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 // POST /api/auth/register (self-registration if matric is whitelisted)
-router.post('/register', (req, res) => {
+router.post('/register', async (req, res) => {
     try {
         const { matric_no } = req.body;
         if (!matric_no) {
             return res.status(400).json({ error: 'Matric number is required' });
         }
 
-        const existing = db.prepare('SELECT id FROM users WHERE matric_no = ?').get(matric_no);
+        const existingResult = await db.prepare('SELECT id FROM users WHERE matric_no = $1').get(matric_no);
+        const existing = existingResult.rows ? existingResult.rows[0] : existingResult;
+        
         if (existing) {
             return res.status(409).json({ error: 'Account already exists. Please login.' });
         }
 
-        const allowed = db.prepare('SELECT id FROM allowed_matrics WHERE matric_no = ?').get(matric_no);
+        const allowedResult = await db.prepare('SELECT id FROM allowed_matrics WHERE matric_no = $1').get(matric_no);
+        const allowed = allowedResult.rows ? allowedResult.rows[0] : allowedResult;
+        
         if (!allowed) {
             return res.status(403).json({ error: 'This matric number is not authorized. Contact your admin.' });
         }
 
         const password = matric_no.slice(-4);
-        const stmt = db.prepare(
-            'INSERT INTO users (matric_no, password, display_name) VALUES (?, ?, ?)'
-        );
-        const result = stmt.run(matric_no, password, matric_no);
+        const result = await db.prepare(
+            'INSERT INTO users (matric_no, password, display_name) VALUES ($1, $2, $3) RETURNING id'
+        ).run(matric_no, password, matric_no);
 
         // Create streak record
-        db.prepare('INSERT INTO streaks (user_id) VALUES (?)').run(result.lastInsertRowid);
+        await db.prepare('INSERT INTO streaks (user_id) VALUES ($1)').run(result.rows[0].id);
 
         res.status(201).json({ message: 'Account created. Your default password is the last 4 characters of your matric number.' });
     } catch (err) {
+        console.error('Register error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
