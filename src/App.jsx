@@ -13,6 +13,8 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const QuizBank = lazy(() => import('./pages/QuizBank'));
 const CourseDetail = lazy(() => import('./pages/CourseDetail'));
 const QuizPage = lazy(() => import('./pages/QuizPage'));
+const Results = lazy(() => import('./pages/Results'));
+const CreateQuiz = lazy(() => import('./pages/CreateQuiz'));
 const AnonymousBoard = lazy(() => import('./pages/AnonymousBoard'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard'));
@@ -128,6 +130,8 @@ export default function App() {
                             <Route path="/quiz/:id" element={<ProtectedRoute><AppLayout><QuizPage /></AppLayout></ProtectedRoute>} />
                             <Route path="/results/:quizId" element={<ProtectedRoute><AppLayout><Results /></AppLayout></ProtectedRoute>} />
                             <Route path="/create-quiz" element={<ProtectedRoute><AppLayout><CreateQuiz /></AppLayout></ProtectedRoute>} />
+                            <Route path="/anonymous-board" element={<ProtectedRoute><AppLayout><AnonymousBoard /></AppLayout></ProtectedRoute>} />
+                            <Route path="/notifications" element={<ProtectedRoute><AppLayout><Notifications /></AppLayout></ProtectedRoute>} />
                             <Route path="/leaderboard" element={<ProtectedRoute><AppLayout><Leaderboard /></AppLayout></ProtectedRoute>} />
                             <Route path="/profile" element={<ProtectedRoute><AppLayout><Profile /></AppLayout></ProtectedRoute>} />
                             <Route path="/profile/:userId" element={<ProtectedRoute><AppLayout><Profile /></AppLayout></ProtectedRoute>} />
