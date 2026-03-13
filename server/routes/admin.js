@@ -53,10 +53,10 @@ router.put('/users/:id/role', verifyToken, requireAdmin, async (req, res) => {
             // Cancel any existing pending promotions for this user
             await db.prepare("UPDATE pending_role_changes SET status = 'declined' WHERE user_id = ? AND status = 'pending'").run(target.id);
 
-            await db.prepare('INSERT INTO pending_role_changes (user_id, new_role, requested_by) VALUES (?, ?, ?)').run(target.id, 'admin', req.user.id);
+            const pendingRes = await db.prepare('INSERT INTO pending_role_changes (user_id, new_role, requested_by) VALUES (?, ?, ?)').run(target.id, 'admin', req.user.id);
 
-            await db.prepare('INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)').run(
-                target.id, 'role_promotion', 'You have been invited to become an administrator.'
+            await db.prepare('INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)').run(
+                target.id, 'role_promotion', 'You have been invited to become an administrator.', pendingRes.lastInsertRowid
             );
             res.json({ message: `Admin invitation sent to ${target.display_name || target.matric_no}` });
 

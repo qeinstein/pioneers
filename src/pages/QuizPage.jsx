@@ -14,6 +14,7 @@ export default function QuizPage() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [started, setStarted] = useState(false);
+    const [startingCountdown, setStartingCountdown] = useState(null);
     const [timeElapsed, setTimeElapsed] = useState(0);
     const [bookmarked, setBookmarked] = useState(false);
     const timerRef = useRef(null);
@@ -111,9 +112,37 @@ export default function QuizPage() {
                         <button onClick={() => navigate(-1)} className="btn btn-ghost">Back</button>
                         <button onClick={toggleBookmark} className="btn btn-ghost">{bookmarked ? 'Saved' : 'Save'}</button>
                         <button onClick={startLive} className="btn btn-ghost">Start Live</button>
-                        <button onClick={() => setStarted(true)} className="btn btn-primary btn-lg">Solo Practice</button>
+                        <button onClick={() => {
+                            setStartingCountdown(5);
+                            let t = 4;
+                            const int = setInterval(() => {
+                                if (t === 0) {
+                                    clearInterval(int);
+                                    setStartingCountdown(null);
+                                    setStarted(true);
+                                } else {
+                                    setStartingCountdown(t);
+                                    t--;
+                                }
+                            }, 1000);
+                        }} className="btn btn-primary btn-lg">Solo Practice</button>
                     </div>
                 </div>
+
+                {startingCountdown !== null && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)'
+                    }}>
+                        <div className="animate-scale-in" key={startingCountdown} style={{
+                            fontSize: '120px', fontWeight: 800, color: 'white',
+                            textShadow: '0 10px 30px rgba(0,0,0,0.5)', fontFamily: 'var(--font-mono)'
+                        }}>
+                            {startingCountdown}
+                        </div>
+                    </div>
+                )}
 
                 <CommentSection quizId={id} />
             </div>

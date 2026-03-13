@@ -24,6 +24,15 @@ export default function Dashboard() {
 
     if (loading) return <div className="page-container"><div className="loading-spinner"><div className="spinner"></div></div></div>;
 
+    const quickLinks = [
+        { to: '/quiz-bank', emoji: '📝', label: 'Quiz Bank', desc: 'Browse & take quizzes', color: 'var(--primary)' },
+        { to: '/flashcards', emoji: '📇', label: 'Flashcards', desc: 'Study with flashcards', color: 'var(--warning)' },
+        { to: '/marketplace', emoji: '🛍️', label: 'Marketplace', desc: 'Buy & sell items', color: 'var(--success)' },
+        { to: '/directory', emoji: '👥', label: 'Directory', desc: 'Find course mates', color: 'var(--info, #60a5fa)' },
+        { to: '/leaderboard', emoji: '🏆', label: 'Leaderboard', desc: 'See top performers', color: 'var(--error)' },
+        { to: '/suggestions', emoji: '💬', label: 'Feedback', desc: 'Share your thoughts', color: '#a78bfa' },
+    ];
+
     return (
         <div className="page-container">
             {/* Welcome */}
@@ -42,12 +51,17 @@ export default function Dashboard() {
                             Welcome back, {user?.display_name || user?.matric_no}
                         </h1>
                         <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)', marginTop: 'var(--space-1)' }}>
-                            Ready to get started?
+                            Your department portal — everything in one place.
                         </p>
                     </div>
                     {stats?.streak && stats.streak.current_streak > 0 && (
                         <div className="streak-display">
-                            <span>{stats.streak.current_streak} day streak</span>
+                            <span className="streak-flame">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                    <path d="M12 2c0 0-5 5-5 11 0 2.76 2.24 5 5 5s5-2.24 5-5c0-6-5-11-5-11zm0 14c-1.66 0-3-1.34-3-3 0-2 3-5.4 3-5.4s3 3.4 3 5.4c0 1.66-1.34 3-3 3z" />
+                                </svg>
+                            </span>
+                            <span>{stats.streak.current_streak} Day Streak!</span>
                         </div>
                     )}
                 </div>
@@ -70,6 +84,22 @@ export default function Dashboard() {
                 <div className="stat-card">
                     <div className="stat-value">{stats?.achievements?.length || 0}</div>
                     <div className="stat-label">Achievements</div>
+                </div>
+            </div>
+
+            {/* Quick Links */}
+            <div style={{ marginBottom: 'var(--space-8)' }}>
+                <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, letterSpacing: '-0.02em', marginBottom: 'var(--space-4)' }}>Quick Access</h2>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: 'var(--space-3)' }} className="stagger-children">
+                    {quickLinks.map(link => (
+                        <Link key={link.to} to={link.to} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <div className="card" style={{ textAlign: 'center', padding: 'var(--space-4)' }}>
+                                <div style={{ fontSize: '1.8rem', marginBottom: 'var(--space-2)' }}>{link.emoji}</div>
+                                <div style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{link.label}</div>
+                                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginTop: '2px' }}>{link.desc}</div>
+                            </div>
+                        </Link>
+                    ))}
                 </div>
             </div>
 
@@ -121,3 +151,4 @@ export default function Dashboard() {
         </div>
     );
 }
+

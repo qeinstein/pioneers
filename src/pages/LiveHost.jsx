@@ -81,9 +81,14 @@ export default function LiveHost() {
                         </div>
                     </div>
 
-                    <button className="btn btn-primary btn-lg" onClick={startQuiz} disabled={participants.length === 0}>
-                        Start Quiz ({session.question_count} questions)
-                    </button>
+                    <div className="flex gap-3 justify-center">
+                        <button className="btn btn-ghost" onClick={() => window.open(`/live/join/${code.toUpperCase()}`, '_blank')}>
+                            Join as Player
+                        </button>
+                        <button className="btn btn-primary btn-lg" onClick={startQuiz} disabled={participants.length === 0}>
+                            Start Quiz ({session.question_count} questions)
+                        </button>
+                    </div>
                 </div>
             </div>
         );

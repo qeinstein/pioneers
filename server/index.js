@@ -19,7 +19,9 @@ import bookmarkRoutes from './routes/bookmarks.js';
 import notificationRoutes from './routes/notifications.js';
 import adminRoutes from './routes/admin.js';
 import liveRoutes from './routes/live.js';
-import anonymousRoutes from './routes/anonymous.js';
+import marketplaceRoutes from './routes/marketplace.js';
+import flashcardRoutes from './routes/flashcards.js';
+import pollRoutes from './routes/polls.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -35,43 +37,13 @@ const PORT = process.env.PORT || 3001;
 // Trust proxy for correct client IP detection behind reverse proxies (like Render)
 app.set('trust proxy', 1);
 
-// Auto-create admin user if none exists
-async function ensureAdminUser() {
-    try {
-        const adminCountResult = await db.prepare('SELECT COUNT(*) as count FROM users WHERE role = $1').get('admin');
-        const adminCount = adminCountResult && adminCountResult.count !== undefined && adminCountResult.count !== undefined ? Number(adminCountResult.count) : 0;
-
-        if (adminCount === 0) {
-            console.log('No admin user found. Creating default admin...');
-            await db.prepare(`
-                INSERT INTO users (matric_no, password, display_name, role, is_first_login)
-                VALUES ($1, $2, $3, 'admin', 0)
-            `).run('240805099', 'admin', 'Admin');
-            console.log('Default admin created: 240805099 / admin');
-        } else {
-            console.log(`Found ${adminCount} admin user(s). Skipping creation.`);
-        }
-    } catch (err) {
-        console.error('Error ensuring admin user:', err);
-    }
-}
-
-// Run admin check on startup
+// Checking db on startup
 // Only run seed if no ad min exists (not if database is empty)
 (async () => {
     try {
-        console.log('Checking for admin users...');
-        const adminCountResult = await db.prepare('SELECT COUNT(*) as count FROM users WHERE role = $1').get('admin');
-        console.log('Admin count result:', adminCountResult);
+        const adminCountResult = await db.prepare('SELECT COUNT(*) as count FROM users WHERE role = ?').get('admin');
         const adminCount = adminCountResult ? Number(adminCountResult.count) : 0;
         console.log('Admin count:', adminCount);
-
-        if (adminCount === 0) {
-            console.log('No admin user found. Running seed...');
-            await ensureAdminUser();
-        } else {
-            console.log(`Found ${adminCount} admin user(s). Skipping seed.`);
-        }
     } catch (err) {
         console.error('Error checking database:', err);
     }
@@ -103,7 +75,9 @@ app.use('/api/bookmarks', bookmarkRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/live', liveRoutes);
-app.use('/api/anonymous', anonymousRoutes);
+app.use('/api/marketplace', marketplaceRoutes);
+app.use('/api/flashcards', flashcardRoutes);
+app.use('/api/polls', pollRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

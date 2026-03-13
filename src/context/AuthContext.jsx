@@ -68,7 +68,15 @@ export function AuthProvider({ children }) {
         return data;
     }
 
-    function logout() {
+    async function logout() {
+        try {
+            if (token) {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+            }
+        } catch { /* ignore */ }
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
@@ -115,6 +123,10 @@ export function AuthProvider({ children }) {
         setUser(prev => ({ ...prev, is_first_login: false }));
         return data;
     }
+    function updateToken(newToken) {
+        localStorage.setItem('token', newToken);
+        setToken(newToken);
+    }
 
     const value = {
         user, token, loading, darkMode,
@@ -124,6 +136,7 @@ export function AuthProvider({ children }) {
         isAdmin: user?.role === 'admin',
         isFirstLogin: user?.is_first_login,
         refreshProfile: fetchProfile,
+        updateToken,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

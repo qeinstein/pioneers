@@ -23,12 +23,12 @@ export default function RolePopup({ promotions, demotions, token, onDone }) {
             });
             const data = await res.json();
             if (step + 1 >= allItems.length) {
-                onDone(data.new_role);
+                onDone(data.new_role, data.token);
             } else {
                 setStep(s => s + 1);
             }
         } catch {
-            if (step + 1 >= allItems.length) onDone(null);
+            if (step + 1 >= allItems.length) onDone(null, null);
             else setStep(s => s + 1);
         } finally { setLoading(false); }
     }

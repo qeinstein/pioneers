@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Notifications() {
-    const { token, unreadCount, markAllRead } = useAuth();
+    const { token, unreadCount, markAllRead, updateToken } = useAuth();
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -21,6 +21,29 @@ export default function Notifications() {
         } else {
             await fetch(`/api/notifications/${id}/read`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
+        }
+    }
+
+    async function handleRoleAction(notif, action) {
+        if (!notif.reference_id) return;
+        try {
+            const res = await fetch(`/api/auth/pending-actions/${notif.reference_id}/respond`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ action }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                // Mark the notification as read so the buttons disappear
+                handleMarkRead(notif.id);
+                // The new token is handled by RoleActionChecker usually, but here they can just refresh to see admin features
+                if (action === 'accept') {
+                    if (data.token) updateToken(data.token);
+                    window.location.reload(); // Quick way to grant admin UI immediately
+                }
+            }
+        } catch (err) {
+            console.error('Failed to respond to role action', err);
         }
     }
 
@@ -77,11 +100,23 @@ export default function Notifications() {
                                     {new Date(notif.created_at).toLocaleString()}
                                 </div>
                             </div>
-                            {!notif.is_read && (
-                                <button className="btn btn-ghost btn-sm" onClick={() => handleMarkRead(notif.id)}>
-                                    Mark read
-                                </button>
-                            )}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                                {notif.type === 'role_promotion' && !notif.is_read && notif.reference_id && (
+                                    <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                                        <button className="btn btn-primary btn-sm" onClick={() => handleRoleAction(notif, 'accept')}>
+                                            Accept
+                                        </button>
+                                        <button className="btn btn-ghost btn-sm" onClick={() => handleRoleAction(notif, 'decline')}>
+                                            Decline
+                                        </button>
+                                    </div>
+                                )}
+                                {!notif.is_read && notif.type !== 'role_promotion' && (
+                                    <button className="btn btn-ghost btn-sm" onClick={() => handleMarkRead(notif.id)}>
+                                        Mark read
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     ))
                 )}

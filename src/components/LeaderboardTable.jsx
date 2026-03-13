@@ -24,7 +24,7 @@ export default function LeaderboardTable({ data, currentUserId }) {
                     <tr>
                         <th style={{ width: '60px' }}>Rank</th>
                         <th>Student</th>
-                        <th>Best Score</th>
+                        <th>Total Points</th>
                         <th>Avg Score</th>
                         <th>Best Time</th>
                         <th>Attempts</th>
@@ -46,8 +46,8 @@ export default function LeaderboardTable({ data, currentUserId }) {
                                 </Link>
                             </td>
                             <td>
-                                <span style={{ fontWeight: 700, color: row.best_score >= 80 ? 'var(--success)' : row.best_score >= 50 ? 'var(--warning)' : 'var(--error)' }}>
-                                    {row.best_score}%
+                                <span style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                                    {row.total_points}
                                 </span>
                             </td>
                             <td style={{ fontSize: 'var(--font-sm)' }}>{row.avg_score}%</td>

@@ -8,25 +8,28 @@ import RolePopup from './components/RolePopup';
 // Lazy-load all pages for fast initial render
 const Login = lazy(() => import('./pages/Login'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
-const SetUsername = lazy(() => import('./pages/SetUsername'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Directory = lazy(() => import('./pages/Directory'));
 const QuizBank = lazy(() => import('./pages/QuizBank'));
 const CourseDetail = lazy(() => import('./pages/CourseDetail'));
 const QuizPage = lazy(() => import('./pages/QuizPage'));
 const Results = lazy(() => import('./pages/Results'));
 const CreateQuiz = lazy(() => import('./pages/CreateQuiz'));
-const AnonymousBoard = lazy(() => import('./pages/AnonymousBoard'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard'));
 const Profile = lazy(() => import('./pages/Profile'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Suggestions = lazy(() => import('./pages/Suggestions'));
+const Marketplace = lazy(() => import('./pages/Marketplace'));
+const Flashcards = lazy(() => import('./pages/Flashcards'));
 const LiveHost = lazy(() => import('./pages/LiveHost'));
 const LiveJoin = lazy(() => import('./pages/LiveJoin'));
+const Voting = lazy(() => import('./pages/Voting'));
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
 const ManageUsers = lazy(() => import('./pages/admin/ManageUsers'));
 const ManageCourses = lazy(() => import('./pages/admin/ManageCourses'));
 const ManageQuizzes = lazy(() => import('./pages/admin/ManageQuizzes'));
+const ManageApprovals = lazy(() => import('./pages/admin/ManageApprovals'));
 
 function PageLoader() {
     return (
@@ -54,7 +57,7 @@ function AppLayout({ children }) {
 }
 
 function RoleActionChecker({ children }) {
-    const { token, refreshProfile, isAuthenticated } = useAuth();
+    const { token, refreshProfile, isAuthenticated, updateToken } = useAuth();
     const [pendingData, setPendingData] = useState(null);
     const [checked, setChecked] = useState(false);
 
@@ -72,9 +75,10 @@ function RoleActionChecker({ children }) {
             .catch(() => setChecked(true));
     }, [isAuthenticated, token]);
 
-    function handleDone(newRole) {
+    function handleDone(newRole, newToken) {
         setPendingData(null);
         setChecked(true);
+        if (newToken) updateToken(newToken);
         if (newRole) refreshProfile();
     }
 
@@ -96,61 +100,49 @@ function RoleActionChecker({ children }) {
     return children;
 }
 
-function UsernameChecker({ children }) {
-    const { isAuthenticated, user } = useAuth();
-
-    // Only intercept if they are logged in and don't have a username
-    if (isAuthenticated && user && !user.username) {
-        return <SetUsername />;
-    }
-
-    return children;
-}
-
 export default function App() {
     const { isAuthenticated, darkMode } = useAuth();
 
     return (
         <div data-theme={darkMode ? 'dark' : 'light'}>
             <RoleActionChecker>
-                <UsernameChecker>
-                    <Suspense fallback={<PageLoader />}>
-                        <Routes>
-                            <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
-                            <Route path="/change-password" element={
-                                <ProtectedRoute allowFirstLogin><ChangePassword /></ProtectedRoute>
-                            } />
-                            <Route path="/set-username" element={
-                                <ProtectedRoute><SetUsername /></ProtectedRoute>
-                            } />
+                <Suspense fallback={<PageLoader />}>
+                    <Routes>
+                        <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
+                        <Route path="/change-password" element={
+                            <ProtectedRoute allowFirstLogin><ChangePassword /></ProtectedRoute>
+                        } />
 
-                            <Route path="/" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
-                            <Route path="/quiz-bank" element={<ProtectedRoute><AppLayout><QuizBank /></AppLayout></ProtectedRoute>} />
-                            <Route path="/courses/:id" element={<ProtectedRoute><AppLayout><CourseDetail /></AppLayout></ProtectedRoute>} />
-                            <Route path="/quiz/:id" element={<ProtectedRoute><AppLayout><QuizPage /></AppLayout></ProtectedRoute>} />
-                            <Route path="/results/:quizId" element={<ProtectedRoute><AppLayout><Results /></AppLayout></ProtectedRoute>} />
-                            <Route path="/create-quiz" element={<ProtectedRoute><AppLayout><CreateQuiz /></AppLayout></ProtectedRoute>} />
-                            <Route path="/anonymous-board" element={<ProtectedRoute><AppLayout><AnonymousBoard /></AppLayout></ProtectedRoute>} />
-                            <Route path="/notifications" element={<ProtectedRoute><AppLayout><Notifications /></AppLayout></ProtectedRoute>} />
-                            <Route path="/leaderboard" element={<ProtectedRoute><AppLayout><Leaderboard /></AppLayout></ProtectedRoute>} />
-                            <Route path="/profile" element={<ProtectedRoute><AppLayout><Profile /></AppLayout></ProtectedRoute>} />
-                            <Route path="/profile/:userId" element={<ProtectedRoute><AppLayout><Profile /></AppLayout></ProtectedRoute>} />
-                            <Route path="/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
-                            <Route path="/suggestions" element={<ProtectedRoute><AppLayout><Suggestions /></AppLayout></ProtectedRoute>} />
+                        <Route path="/" element={<ProtectedRoute><AppLayout><Dashboard /></AppLayout></ProtectedRoute>} />
+                        <Route path="/directory" element={<ProtectedRoute><AppLayout><Directory /></AppLayout></ProtectedRoute>} />
+                        <Route path="/quiz-bank" element={<ProtectedRoute><AppLayout><QuizBank /></AppLayout></ProtectedRoute>} />
+                        <Route path="/courses/:id" element={<ProtectedRoute><AppLayout><CourseDetail /></AppLayout></ProtectedRoute>} />
+                        <Route path="/quiz/:id" element={<ProtectedRoute><AppLayout><QuizPage /></AppLayout></ProtectedRoute>} />
+                        <Route path="/results/:quizId" element={<ProtectedRoute><AppLayout><Results /></AppLayout></ProtectedRoute>} />
+                        <Route path="/create-quiz" element={<ProtectedRoute><AppLayout><CreateQuiz /></AppLayout></ProtectedRoute>} />
+                        <Route path="/notifications" element={<ProtectedRoute><AppLayout><Notifications /></AppLayout></ProtectedRoute>} />
+                        <Route path="/leaderboard" element={<ProtectedRoute><AppLayout><Leaderboard /></AppLayout></ProtectedRoute>} />
+                        <Route path="/profile" element={<ProtectedRoute><AppLayout><Profile /></AppLayout></ProtectedRoute>} />
+                        <Route path="/profile/:userId" element={<ProtectedRoute><AppLayout><Profile /></AppLayout></ProtectedRoute>} />
+                        <Route path="/settings" element={<ProtectedRoute><AppLayout><Settings /></AppLayout></ProtectedRoute>} />
+                        <Route path="/suggestions" element={<ProtectedRoute><AppLayout><Suggestions /></AppLayout></ProtectedRoute>} />
+                        <Route path="/marketplace" element={<ProtectedRoute><AppLayout><Marketplace /></AppLayout></ProtectedRoute>} />
+                        <Route path="/flashcards" element={<ProtectedRoute><AppLayout><Flashcards /></AppLayout></ProtectedRoute>} />
+                        <Route path="/voting" element={<ProtectedRoute><AppLayout><Voting /></AppLayout></ProtectedRoute>} />
 
-                            <Route path="/live/host/:code" element={<ProtectedRoute><AppLayout><LiveHost /></AppLayout></ProtectedRoute>} />
-                            <Route path="/live/join" element={<ProtectedRoute><AppLayout><LiveJoin /></AppLayout></ProtectedRoute>} />
-                            <Route path="/live/play/:code" element={<ProtectedRoute><AppLayout><LiveJoin /></AppLayout></ProtectedRoute>} />
+                        <Route path="/live/host/:code" element={<ProtectedRoute><AppLayout><LiveHost /></AppLayout></ProtectedRoute>} />
+                        <Route path="/live/join" element={<ProtectedRoute><AppLayout><LiveJoin /></AppLayout></ProtectedRoute>} />
+                        <Route path="/live/play/:code" element={<ProtectedRoute><AppLayout><LiveJoin /></AppLayout></ProtectedRoute>} />
 
-                            <Route path="/admin" element={<ProtectedRoute adminOnly><AppLayout><AdminDashboard /></AppLayout></ProtectedRoute>} />
-                            <Route path="/admin/users" element={<ProtectedRoute adminOnly><AppLayout><ManageUsers /></AppLayout></ProtectedRoute>} />
-                            <Route path="/admin/courses" element={<ProtectedRoute adminOnly><AppLayout><ManageCourses /></AppLayout></ProtectedRoute>} />
-                            <Route path="/admin/quizzes" element={<ProtectedRoute adminOnly><AppLayout><ManageQuizzes /></AppLayout></ProtectedRoute>} />
+                        <Route path="/admin" element={<ProtectedRoute adminOnly><AppLayout><AdminDashboard /></AppLayout></ProtectedRoute>} />
+                        <Route path="/admin/users" element={<ProtectedRoute adminOnly><AppLayout><ManageUsers /></AppLayout></ProtectedRoute>} />
+                        <Route path="/admin/courses" element={<ProtectedRoute adminOnly><AppLayout><ManageCourses /></AppLayout></ProtectedRoute>} />
+                        <Route path="/admin/quizzes" element={<ProtectedRoute adminOnly><AppLayout><ManageQuizzes /></AppLayout></ProtectedRoute>} />
+                        <Route path="/admin/approvals" element={<ProtectedRoute adminOnly><AppLayout><ManageApprovals /></AppLayout></ProtectedRoute>} />
 
-                            <Route path="*" element={<Navigate to="/" />} />
-                        </Routes>
-                    </Suspense>
-                </UsernameChecker>
+                        <Route path="*" element={<Navigate to="/" />} />
+                    </Routes>
+                </Suspense>
             </RoleActionChecker>
         </div>
     );

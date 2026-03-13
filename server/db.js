@@ -5,9 +5,11 @@ dotenv.config();
 const { Pool } = pg;
 
 // PostgreSQL connection configuration
+const dbUrl = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const needsSsl = process.env.NODE_ENV === 'production' || (dbUrl && dbUrl.includes('neon.tech'));
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  connectionString: dbUrl,
+  ssl: needsSsl ? { rejectUnauthorized: false } : false,
 });
 
 // Test connection on startup
@@ -150,7 +152,6 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         matric_no TEXT UNIQUE NOT NULL,
-        username TEXT UNIQUE DEFAULT NULL,
         password TEXT NOT NULL,
         display_name TEXT DEFAULT '',
         bio TEXT DEFAULT '',
@@ -166,7 +167,6 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS allowed_matrics (
         id SERIAL PRIMARY KEY,
         matric_no TEXT UNIQUE NOT NULL,
-        username TEXT UNIQUE DEFAULT NULL,
         added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -245,6 +245,7 @@ const createTables = async () => {
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         title TEXT NOT NULL,
         text TEXT NOT NULL,
+        parent_id INTEGER REFERENCES suggestions(id) ON DELETE CASCADE,
         status TEXT DEFAULT 'open' CHECK (status IN ('open', 'reviewed')),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
@@ -337,13 +338,6 @@ const createTables = async () => {
 
     // Create live_answers table
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS anonymous_messages (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        content TEXT NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-
       CREATE TABLE IF NOT EXISTS live_answers (
         id SERIAL PRIMARY KEY,
         session_id INTEGER NOT NULL REFERENCES live_sessions(id) ON DELETE CASCADE,
@@ -353,6 +347,85 @@ const createTables = async () => {
         time_ms INTEGER DEFAULT 0,
         is_correct INTEGER DEFAULT 0,
         points INTEGER DEFAULT 0
+      );
+    `);
+
+    // Create marketplace_items_table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS marketplace_items (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        price NUMERIC NOT NULL,
+        contact_info TEXT NOT NULL,
+        image_url_1 TEXT,
+        image_url_2 TEXT,
+        image_url_3 TEXT,
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create flashcards table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS flashcards (
+        id SERIAL PRIMARY KEY,
+        course_id INTEGER REFERENCES courses(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        cards_json TEXT NOT NULL,
+        status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create sessions table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL,
+        device TEXT DEFAULT 'Unknown',
+        ip_address TEXT DEFAULT 'Unknown',
+        is_active INTEGER DEFAULT 1,
+        last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create polls table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS polls (
+        id SERIAL PRIMARY KEY,
+        title TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        is_public INTEGER DEFAULT 0,
+        is_active INTEGER DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create poll_options table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS poll_options (
+        id SERIAL PRIMARY KEY,
+        poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+        option_text TEXT NOT NULL
+      );
+    `);
+
+    // Create poll_votes table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS poll_votes (
+        id SERIAL PRIMARY KEY,
+        poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
+        option_id INTEGER NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(poll_id, user_id)
       );
     `);
 
@@ -367,6 +440,12 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_live_participants_session ON live_participants(session_id);
       CREATE INDEX IF NOT EXISTS idx_live_answers_session ON live_answers(session_id, question_id);
       CREATE INDEX IF NOT EXISTS idx_pending_role_user ON pending_role_changes(user_id, status);
+      CREATE INDEX IF NOT EXISTS idx_marketplace_status ON marketplace_items(status);
+      CREATE INDEX IF NOT EXISTS idx_flashcards_status ON flashcards(status);
+      CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id, is_active);
+      CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token_hash);
+      CREATE INDEX IF NOT EXISTS idx_poll_votes_poll ON poll_votes(poll_id);
+      CREATE INDEX IF NOT EXISTS idx_poll_options_poll ON poll_options(poll_id);
     `);
   } catch (err) {
     console.error('Error creating tables:', err);

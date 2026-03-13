@@ -41,9 +41,16 @@ export default function Profile() {
                 {profile.bio && <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-2)', maxWidth: '500px', margin: 'var(--space-2) auto 0', fontSize: 'var(--font-sm)' }}>{profile.bio}</p>}
                 {profile.role === 'admin' && <span className="badge badge-warning mt-2">Admin</span>}
                 {profile.streak && profile.streak.current_streak > 0 && (
-                    <div className="streak-display justify-center mt-4">
-                        <span>{profile.streak.current_streak} day streak</span>
-                        <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>(Best: {profile.streak.longest_streak})</span>
+                    <div className="mt-4" style={{ display: 'flex', justifyContent: 'center' }}>
+                        <div className="streak-display">
+                            <span className="streak-flame">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                    <path d="M12 2c0 0-5 5-5 11 0 2.76 2.24 5 5 5s5-2.24 5-5c0-6-5-11-5-11zm0 14c-1.66 0-3-1.34-3-3 0-2 3-5.4 3-5.4s3 3.4 3 5.4c0 1.66-1.34 3-3 3z" />
+                                </svg>
+                            </span>
+                            <span>{profile.streak.current_streak} Day Streak!</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginLeft: 'var(--space-2)' }}>(Best: {profile.streak.longest_streak})</span>
+                        </div>
                     </div>
                 )}
                 {isOwnProfile && <Link to="/settings" className="btn btn-ghost btn-sm mt-4">Edit Profile</Link>}

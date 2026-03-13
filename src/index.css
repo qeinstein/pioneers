@@ -1338,12 +1338,37 @@ img {
 
 /* ========== STREAK ========== */
 .streak-display {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--font-sm);
-  color: var(--warning);
+  padding: var(--space-2) var(--space-3);
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.1) 0%, rgba(255, 69, 0, 0.1) 100%);
+  border: 1px solid rgba(255, 140, 0, 0.2);
+  border-radius: var(--radius-full);
+  color: #ff6a00;
+  box-shadow: 0 4px 12px rgba(255, 106, 0, 0.15);
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+.streak-flame {
+  display: inline-block;
+  animation: flicker 1.5s infinite alternate ease-in-out;
+  color: #ff4500;
+  filter: drop-shadow(0 0 4px rgba(255, 69, 0, 0.6));
+}
+
+@keyframes flicker {
+  0% { transform: scale(1) rotate(-2deg); opacity: 0.9; }
+  50% { transform: scale(1.1) rotate(3deg); opacity: 1; filter: drop-shadow(0 0 6px rgba(255, 140, 0, 0.8)); }
+  100% { transform: scale(0.95) rotate(-1deg); opacity: 0.85; }
+}
+
+@keyframes pulse-glow {
+  0% { box-shadow: 0 4px 12px rgba(255, 106, 0, 0.15); }
+  50% { box-shadow: 0 4px 20px rgba(255, 106, 0, 0.3); }
+  100% { box-shadow: 0 4px 12px rgba(255, 106, 0, 0.15); }
 }
 
 /* ========== NOTIFICATION INDICATOR ========== */

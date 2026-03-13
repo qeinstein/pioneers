@@ -126,6 +126,57 @@ router.get('/', verifyToken, async (req, res) => {
     }
 });
 
+// GET /api/quizzes/tags/recent — get top 10 tags based on recent activity
+router.get('/tags/recent', verifyToken, async (req, res) => {
+    try {
+        // Fetch recently attempted quizzes
+        const attempts = await db.prepare(`
+            SELECT q.tags 
+            FROM attempts a 
+            JOIN quizzes q ON a.quiz_id = q.id 
+            WHERE q.status = 'approved'
+            ORDER BY a.created_at DESC 
+            LIMIT 100
+        `).all();
+
+        const tagCounts = {};
+        for (const row of attempts) {
+            try {
+                const tags = JSON.parse(row.tags || '[]');
+                for (const t of tags) {
+                    tagCounts[t] = (tagCounts[t] || 0) + 1;
+                }
+            } catch (e) { }
+        }
+
+        // If not enough from attempts, fetch from recently created quizzes
+        if (Object.keys(tagCounts).length < 5) {
+            const recentQuizzes = await db.prepare(`
+                SELECT tags FROM quizzes WHERE status = 'approved' ORDER BY created_at DESC LIMIT 50
+            `).all();
+            for (const row of recentQuizzes) {
+                try {
+                    const tags = JSON.parse(row.tags || '[]');
+                    for (const t of tags) {
+                        tagCounts[t] = (tagCounts[t] || 0) + 1;
+                    }
+                } catch (e) { }
+            }
+        }
+
+        // Sort by frequency and take top 10
+        const topTags = Object.entries(tagCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 10)
+            .map(entry => entry[0]);
+
+        res.json(topTags);
+    } catch (err) {
+        console.error('Get recent tags error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // GET /api/quizzes/my — quizzes created by current user
 router.get('/my', verifyToken, async (req, res) => {
     try {

@@ -129,7 +129,8 @@ export default function Navbar() {
                                         padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border-color)',
                                         fontSize: 'var(--font-sm)', opacity: n.is_read ? 0.6 : 1,
                                         background: n.is_read ? 'transparent' : 'var(--primary-soft)',
-                                    }}>
+                                        cursor: 'pointer'
+                                    }} onClick={() => { setNotifOpen(false); navigate('/notifications'); }}>
                                         <div>{n.message}</div>
                                         <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginTop: '2px' }}>
                                             {new Date(n.created_at).toLocaleDateString()}

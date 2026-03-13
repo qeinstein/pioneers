@@ -58,6 +58,7 @@ export default function LiveJoin() {
     const [questionResults, setQuestionResults] = useState(null);
     const [finalLeaderboard, setFinalLeaderboard] = useState([]);
     const [countdown, setCountdown] = useState(0);
+    const [startingCountdown, setStartingCountdown] = useState(null);
     const [error, setError] = useState('');
     const [totalScore, setTotalScore] = useState(0);
     // Create flow
@@ -110,7 +111,21 @@ export default function LiveJoin() {
         });
 
         socket.on('participants-update', (p) => setParticipants(p));
-        socket.on('quiz-started', () => { setPhase('question'); });
+        socket.on('quiz-started', () => {
+            setPhase('starting');
+            setStartingCountdown(5);
+            let t = 4;
+            const int = setInterval(() => {
+                if (t === 0) {
+                    clearInterval(int);
+                    setStartingCountdown(null);
+                    setPhase('question'); // fallback or wait for actual question
+                } else {
+                    setStartingCountdown(t);
+                    t--;
+                }
+            }, 1000);
+        });
         socket.on('question', (q) => {
             setQuestion(q);
             setSelectedAnswer(null);
@@ -267,6 +282,26 @@ export default function LiveJoin() {
                                 <span key={p.user_id} className="badge badge-info">{p.display_name || p.matric_no}</span>
                             ))}
                         </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // STARTING COUNTDOWN (student view)
+    if (phase === 'starting' && startingCountdown !== null) {
+        return (
+            <div className="page-container" style={{ textAlign: 'center' }}>
+                <div style={{
+                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)'
+                }}>
+                    <div className="animate-scale-in" key={startingCountdown} style={{
+                        fontSize: '120px', fontWeight: 800, color: 'white',
+                        textShadow: '0 10px 30px rgba(0,0,0,0.5)', fontFamily: 'var(--font-mono)'
+                    }}>
+                        {startingCountdown}
                     </div>
                 </div>
             </div>

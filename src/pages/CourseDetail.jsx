@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import QuizCard from '../components/QuizCard';
 import LeaderboardTable from '../components/LeaderboardTable';
+import MathText from '../components/MathText';
 
 export default function CourseDetail() {
     const { id } = useParams();
@@ -38,7 +39,7 @@ export default function CourseDetail() {
                 </h1>
                 {course.description && (
                     <p style={{ color: 'var(--text-secondary)', marginTop: 'var(--space-2)', maxWidth: '600px', fontSize: 'var(--font-sm)' }}>
-                        {course.description}
+                        <MathText text={course.description} />
                     </p>
                 )}
                 <div className="flex items-center gap-4 mt-4" style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>

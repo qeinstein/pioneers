@@ -20,9 +20,11 @@ export default function QuizBank() {
             fetch('/api/courses', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
             fetchQuizzes(),
             fetch('/api/bookmarks', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        ]).then(([c, , b]) => {
+            fetch('/api/quizzes/tags/recent', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+        ]).then(([c, , b, t]) => {
             setCourses(c);
             setBookmarks(b);
+            if (Array.isArray(t)) setAllTags(t);
         });
     }, []);
 
@@ -34,13 +36,10 @@ export default function QuizBank() {
         if (tagFilter) params.set('tag', tagFilter);
         // If in live mode, only fetch approved quizzes
         if (liveMode) params.set('status', 'approved');
-        
+
         const res = await fetch(`/api/quizzes?${params}`, { headers: { Authorization: `Bearer ${token}` } });
         const data = await res.json();
         setQuizzes(data);
-        const tags = new Set();
-        data.forEach(q => (q.tags || []).forEach(t => tags.add(t)));
-        setAllTags([...tags]);
         setLoading(false);
         return data;
     }

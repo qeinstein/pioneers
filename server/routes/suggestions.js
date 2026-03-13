@@ -18,16 +18,16 @@ router.get('/', verifyToken, async (req, res) => {
         SELECT s.*, u.display_name, u.matric_no
         FROM suggestions s
         JOIN users u ON s.user_id = u.id
-        ORDER BY s.created_at DESC
+        ORDER BY s.created_at ASC
       `).all();
         } else {
             suggestions = await db.prepare(`
         SELECT s.*, u.display_name, u.matric_no
         FROM suggestions s
         JOIN users u ON s.user_id = u.id
-        WHERE s.user_id = ?
-        ORDER BY s.created_at DESC
-      `).all(req.user.id);
+        WHERE s.user_id = ? OR s.parent_id IN (SELECT id FROM suggestions WHERE user_id = ?)
+        ORDER BY s.created_at ASC
+      `).all(req.user.id, req.user.id);
         }
         res.json(suggestions);
     } catch (err) {
@@ -39,14 +39,14 @@ router.get('/', verifyToken, async (req, res) => {
 // POST /api/suggestions
 router.post('/', verifyToken, async (req, res) => {
     try {
-        const { title, text } = req.body;
+        const { title, text, parent_id } = req.body;
         if (!title || !text) {
             return res.status(400).json({ error: 'Title and text are required' });
         }
 
         const result = await db.prepare(
-            'INSERT INTO suggestions (user_id, title, text) VALUES (?, ?, ?)'
-        ).run(req.user.id, sanitize(title), sanitize(text));
+            'INSERT INTO suggestions (user_id, title, text, parent_id) VALUES (?, ?, ?, ?)'
+        ).run(req.user.id, sanitize(title), sanitize(text), parent_id || null);
 
         const suggestion = await db.prepare('SELECT * FROM suggestions WHERE id = ?').get(result.lastInsertRowid);
         res.status(201).json(suggestion);

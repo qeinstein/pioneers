@@ -20,7 +20,11 @@ const Icons = {
     collapse: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="11 17 6 12 11 7"></polyline><polyline points="18 17 13 12 18 7"></polyline></svg>,
     expand: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="13 17 18 12 13 7"></polyline><polyline points="6 17 11 12 6 7"></polyline></svg>,
     menu: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>,
-    // anonymous: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>,
+    marketplace: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>,
+    check: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>,
+    flashcards: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><path d="M3 9h18"></path><path d="M9 21V9"></path></svg>,
+    directory: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
+    vote: <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8" /><path d="m9 12 2 2 4-4" /><path d="M17 21l2-2 2 2" /><path d="M19 17v4" /></svg>,
 };
 
 export default function Sidebar() {
@@ -30,13 +34,10 @@ export default function Sidebar() {
         const saved = localStorage.getItem('sidebarCollapsed');
         return saved === 'true';
     });
-    const [notifOpen, setNotifOpen] = useState(false);
-    const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [profileOpen, setProfileOpen] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
-    const notifRef = useRef(null);
     const profileRef = useRef(null);
     const token = localStorage.getItem('token');
 
@@ -48,13 +49,11 @@ export default function Sidebar() {
 
     useEffect(() => {
         setMobileOpen(false);
-        setNotifOpen(false);
         setProfileOpen(false);
     }, [location]);
 
     useEffect(() => {
         function handleClick(e) {
-            if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
             if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false);
         }
         document.addEventListener('mousedown', handleClick);
@@ -78,18 +77,13 @@ export default function Sidebar() {
         } catch { }
     }
 
-    async function markAllRead() {
-        try {
-            await fetch('/api/notifications/read-all', { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
-            setUnreadCount(0);
-            setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
-        } catch { }
-    }
+
 
     const isActive = (path) => location.pathname === path;
 
     const mainLinks = [
         { to: '/', label: 'Dashboard', icon: Icons.dashboard },
+        { to: '/directory', label: 'Directory', icon: Icons.directory },
     ];
 
     const quizLinks = [
@@ -99,9 +93,14 @@ export default function Sidebar() {
         { to: '/leaderboard', label: 'Leaderboard', icon: Icons.leaderboard },
     ];
 
+    const resourcesLinks = [
+        { to: '/flashcards', label: 'Flashcards', icon: Icons.flashcards },
+        { to: '/marketplace', label: 'Marketplace', icon: Icons.marketplace },
+    ];
+
     const communityLinks = [
-        // { to: '/anonymous-board', label: 'Anonymous Board', icon: Icons.anonymous },
         { to: '/suggestions', label: 'Feedback', icon: Icons.feedback },
+        { to: '/voting', label: 'Voting', icon: Icons.vote },
     ];
 
     const adminLinks = [
@@ -109,6 +108,7 @@ export default function Sidebar() {
         { to: '/admin/users', label: 'Users', icon: Icons.users },
         { to: '/admin/courses', label: 'Courses', icon: Icons.courses },
         { to: '/admin/quizzes', label: 'Quizzes', icon: Icons.quizManage },
+        { to: '/admin/approvals', label: 'Approvals', icon: Icons.check },
     ];
 
     const initials = (user?.display_name || user?.matric_no || '?').slice(0, 2).toUpperCase();
@@ -175,52 +175,23 @@ export default function Sidebar() {
                     </div>
 
                     <div className="sidebar-section">
+                        <div className="sidebar-section-title">Resources</div>
+                        {renderLinks(resourcesLinks)}
+                    </div>
+
+                    <div className="sidebar-section">
                         <div className="sidebar-section-title">Community</div>
                         {renderLinks(communityLinks)}
-                        <div ref={notifRef}>
-                            <button className={`sidebar-link ${notifOpen ? 'active' : ''}`} onClick={() => { setNotifOpen(!notifOpen); if (!notifOpen) markAllRead(); }} style={{ width: '100%', border: 'none', background: 'none' }}>
-                                <span className="sidebar-link-icon" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    <div style={{ width: '18px', height: '18px', display: 'flex' }}>
-                                        {Icons.bell}
-                                    </div>
-                                    {unreadCount > 0 && <span className="notif-indicator" style={{ position: 'absolute', top: '-4px', right: '-4px', width: '8px', height: '8px', background: 'var(--error)', borderRadius: '50%' }}></span>}
-                                </span>
-                                {!collapsed && <span className="sidebar-link-label" style={{ flex: 1, textAlign: 'left' }}>Notifications</span>}
-                                {!collapsed && unreadCount > 0 && <span style={{ background: 'var(--error)', color: 'white', borderRadius: '10px', padding: '0 6px', fontSize: '10px', fontWeight: 600 }}>{unreadCount}</span>}
-                            </button>
-
-                            {notifOpen && (
-                                <div style={{
-                                    position: 'fixed', top: '50%', left: collapsed ? '80px' : '270px', width: '300px', transform: 'translateY(-50%)',
-                                    background: 'var(--bg-card-solid)', border: '1px solid var(--border-color)',
-                                    borderRadius: 'var(--radius-xl)', boxShadow: 'var(--glass-shadow)',
-                                    overflow: 'hidden', animation: 'slideRight 0.2s ease', zIndex: 300,
-                                }}>
-                                    <div style={{ padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border-color)', fontWeight: 600, fontSize: 'var(--font-xs)', textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <span>Notifications</span>
-                                        <button onClick={() => setNotifOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '18px' }}>&times;</button>
-                                    </div>
-                                    <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
-                                        {notifications.length === 0 ? (
-                                            <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
-                                                No notifications
-                                            </div>
-                                        ) : notifications.map(n => (
-                                            <div key={n.id} style={{
-                                                padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border-color)',
-                                                fontSize: 'var(--font-sm)', opacity: n.is_read ? 0.5 : 1,
-                                                background: n.is_read ? 'transparent' : 'var(--primary-soft)',
-                                            }}>
-                                                <div style={{ color: 'var(--text-secondary)' }}>{n.message}</div>
-                                                <div style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginTop: '2px' }}>
-                                                    {new Date(n.created_at).toLocaleDateString()}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
+                        <Link to="/notifications" className={`sidebar-link ${isActive('/notifications') ? 'active' : ''}`}>
+                            <span className="sidebar-link-icon" style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <div style={{ width: '18px', height: '18px', display: 'flex' }}>
+                                    {Icons.bell}
                                 </div>
-                            )}
-                        </div>
+                                {unreadCount > 0 && <span className="notif-indicator" style={{ position: 'absolute', top: '-4px', right: '-4px', width: '8px', height: '8px', background: 'var(--error)', borderRadius: '50%' }}></span>}
+                            </span>
+                            <span className="sidebar-link-label" style={{ flex: 1, textAlign: 'left' }}>Notifications</span>
+                            {!collapsed && unreadCount > 0 && <span style={{ background: 'var(--error)', color: 'white', borderRadius: '10px', padding: '0 6px', fontSize: '10px', fontWeight: 600 }}>{unreadCount}</span>}
+                        </Link>
                     </div>
 
                     {isAdmin && (

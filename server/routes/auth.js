@@ -1,35 +1,12 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import multer from 'multer';
-import { existsSync, mkdirSync } from 'fs';
-import { join, extname } from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import db from '../db.js';
 import { verifyToken, JWT_SECRET } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/rateLimit.js';
+import { uploadAvatar } from '../cloudinary.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-import { v2 as cloudinary } from 'cloudinary';
-import { CloudinaryStorage } from 'multer-storage-cloudinary';
-
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
-const storage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-        folder: 'pioneers_avatars',
-        allowed_formats: ['jpeg', 'png', 'jpg', 'webp'],
-        transformation: [{ width: 500, height: 500, crop: 'limit' }]
-    }
-});
-const upload = multer({ storage, limits: { fileSize: 5 * 1024 * 1024 } });
+const upload = uploadAvatar;
 
 const router = Router();
 
@@ -54,15 +31,24 @@ router.post('/login', loginLimiter, async (req, res) => {
         const token = jwt.sign(
             { id: user.id, matric_no: user.matric_no, role: user.role },
             JWT_SECRET,
-            { expiresIn: '24h' }
+            { expiresIn: '7d' }
         );
+
+        // Track session
+        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+        const ua = req.headers['user-agent'] || 'Unknown';
+        const device = parseDevice(ua);
+        const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'Unknown';
+
+        await db.prepare(
+            'INSERT INTO sessions (user_id, token_hash, device, ip_address) VALUES (?, ?, ?, ?)'
+        ).run(user.id, tokenHash, device, ip);
 
         res.json({
             token,
             user: {
                 id: user.id,
                 matric_no: user.matric_no,
-                username: user.username,
                 display_name: user.display_name,
                 bio: user.bio,
                 profile_pic_url: user.profile_pic_url,
@@ -140,7 +126,7 @@ router.post('/change-password', verifyToken, async (req, res) => {
 router.get('/profile', verifyToken, async (req, res) => {
     try {
         const user = await db.prepare(
-            'SELECT id, matric_no, username, display_name, bio, profile_pic_url, role, is_first_login, created_at FROM users WHERE id = ?'
+            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, is_first_login, created_at FROM users WHERE id = ?'
         ).get(req.user.id);
 
         if (!user) return res.status(404).json({ error: 'User not found' });
@@ -168,11 +154,24 @@ router.get('/profile', verifyToken, async (req, res) => {
     }
 });
 
+// GET /api/auth/users (public directory)
+router.get('/users', verifyToken, async (req, res) => {
+    try {
+        const users = await db.prepare(
+            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, created_at FROM users ORDER BY display_name ASC, matric_no ASC'
+        ).all();
+        res.json(users);
+    } catch (err) {
+        console.error('Get all users error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
 // GET /api/auth/profile/:userId (public profile)
 router.get('/profile/:userId', verifyToken, async (req, res) => {
     try {
         const user = await db.prepare(
-            'SELECT id, matric_no, username, display_name, bio, profile_pic_url, role, created_at FROM users WHERE id = ?'
+            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, created_at FROM users WHERE id = ?'
         ).get(req.params.userId);
 
         if (!user) return res.status(404).json({ error: 'User not found' });
@@ -220,7 +219,7 @@ router.put('/profile', verifyToken, async (req, res) => {
             .run(display_name, bio, req.user.id);
 
         const user = await db.prepare(
-            'SELECT id, matric_no, username, display_name, bio, profile_pic_url, role, is_first_login FROM users WHERE id = ?'
+            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, is_first_login FROM users WHERE id = ?'
         ).get(req.user.id);
 
         res.json({ ...user, is_first_login: user.is_first_login === 1 });
@@ -230,33 +229,7 @@ router.put('/profile', verifyToken, async (req, res) => {
     }
 });
 
-// PUT /api/auth/username
-router.put('/username', verifyToken, async (req, res) => {
-    try {
-        let { username } = req.body;
-        if (!username || username.trim().length < 3) {
-            return res.status(400).json({ error: 'Username must be at least 3 characters long.' });
-        }
-        username = username.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
 
-        // Check if taken
-        const existing = await db.prepare('SELECT id FROM users WHERE username = ?').get(username);
-        if (existing) {
-            return res.status(409).json({ error: 'Username is already taken.' });
-        }
-
-        await db.prepare('UPDATE users SET username = ? WHERE id = ?').run(username, req.user.id);
-
-        const user = await db.prepare(
-            'SELECT id, matric_no, username, display_name, bio, profile_pic_url, role, is_first_login FROM users WHERE id = ?'
-        ).get(req.user.id);
-
-        res.json({ ...user, is_first_login: user.is_first_login === 1 });
-    } catch (err) {
-        console.error('Update username error:', err);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
 
 // POST /api/auth/avatar
 router.post('/avatar', verifyToken, upload.single('avatar'), async (req, res) => {
@@ -313,7 +286,15 @@ router.post('/pending-actions/:id/respond', verifyToken, async (req, res) => {
         if (action === 'accept') {
             await db.prepare('UPDATE users SET role = ? WHERE id = ?').run(pending.new_role, req.user.id);
             await db.prepare("UPDATE pending_role_changes SET status = 'accepted' WHERE id = ?").run(pending.id);
-            res.json({ message: 'You are now an admin', new_role: 'admin' });
+
+            const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+            const newToken = jwt.sign(
+                { id: user.id, matric_no: user.matric_no, role: user.role },
+                JWT_SECRET,
+                { expiresIn: '24h' }
+            );
+
+            res.json({ message: 'You are now an admin', new_role: 'admin', token: newToken });
         } else {
             await db.prepare("UPDATE pending_role_changes SET status = 'declined' WHERE id = ?").run(pending.id);
             res.json({ message: 'Admin invitation declined', new_role: 'student' });
@@ -331,6 +312,73 @@ router.post('/acknowledge-demotion', verifyToken, async (req, res) => {
         res.json({ message: 'Acknowledged' });
     } catch (err) {
         console.error('Acknowledge demotion error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Helper to parse device from User-Agent
+function parseDevice(ua) {
+    if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS Device';
+    if (/Android/i.test(ua)) return 'Android Device';
+    if (/Windows/i.test(ua)) return 'Windows PC';
+    if (/Mac/i.test(ua)) return 'Mac';
+    if (/Linux/i.test(ua)) return 'Linux PC';
+    return 'Unknown Device';
+}
+
+// GET /api/auth/sessions — list active sessions for current user
+router.get('/sessions', verifyToken, async (req, res) => {
+    try {
+        const sessions = await db.prepare(
+            'SELECT id, device, ip_address, is_active, last_active, created_at FROM sessions WHERE user_id = ? AND is_active = 1 ORDER BY last_active DESC'
+        ).all(req.user.id);
+
+        // Mark the current session
+        const authHeader = req.headers['authorization'];
+        const currentToken = authHeader && authHeader.split(' ')[1];
+        const currentHash = currentToken ? crypto.createHash('sha256').update(currentToken).digest('hex') : null;
+
+        const currentSession = currentHash
+            ? await db.prepare('SELECT id FROM sessions WHERE token_hash = ? AND is_active = 1').get(currentHash)
+            : null;
+
+        res.json(sessions.map(s => ({
+            ...s,
+            is_current: currentSession ? s.id === currentSession.id : false
+        })));
+    } catch (err) {
+        console.error('Get sessions error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// DELETE /api/auth/sessions/:id — revoke a session
+router.delete('/sessions/:id', verifyToken, async (req, res) => {
+    try {
+        const result = await db.prepare(
+            'UPDATE sessions SET is_active = 0 WHERE id = ? AND user_id = ?'
+        ).run(req.params.id, req.user.id);
+
+        if (result.changes === 0) return res.status(404).json({ error: 'Session not found' });
+        res.json({ message: 'Session revoked' });
+    } catch (err) {
+        console.error('Revoke session error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST /api/auth/logout — invalidate current session
+router.post('/logout', verifyToken, async (req, res) => {
+    try {
+        const authHeader = req.headers['authorization'];
+        const currentToken = authHeader && authHeader.split(' ')[1];
+        if (currentToken) {
+            const tokenHash = crypto.createHash('sha256').update(currentToken).digest('hex');
+            await db.prepare('UPDATE sessions SET is_active = 0 WHERE token_hash = ?').run(tokenHash);
+        }
+        res.json({ message: 'Logged out' });
+    } catch (err) {
+        console.error('Logout error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });

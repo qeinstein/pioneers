@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import ConfirmModal from '../../components/ConfirmModal';
 
 export default function ManageQuizzes() {
     const { token } = useAuth();
@@ -9,6 +10,7 @@ export default function ManageQuizzes() {
     const [loading, setLoading] = useState(true);
     const [tab, setTab] = useState('pending');
     const [msg, setMsg] = useState('');
+    const [confirmAction, setConfirmAction] = useState(null);
 
     useEffect(() => {
         Promise.all([
@@ -31,80 +33,104 @@ export default function ManageQuizzes() {
         setMsg('Quiz rejected');
     }
 
-    async function deleteQuiz(id) {
-        if (!confirm('Delete this quiz permanently?')) return;
-        await fetch(`/api/quizzes/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-        setQuizzes(prev => prev.filter(q => q.id !== id));
-        setMsg('Quiz deleted');
+    function deleteQuiz(q) {
+        setConfirmAction({
+            title: 'Delete Quiz',
+            message: `Are you sure you want to delete "${q.title}" permanently?`,
+            confirmText: 'Delete Quiz',
+            variant: 'danger',
+            action: async () => {
+                const res = await fetch(`/api/quizzes/${q.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Failed to delete quiz');
+                }
+                setQuizzes(prev => prev.filter(quiz => quiz.id !== q.id));
+                setMsg('Quiz deleted');
+                return 'Quiz deleted successfully';
+            }
+        });
     }
 
     if (loading) return <div className="page-container"><div className="loading-spinner"><div className="spinner"></div></div></div>;
 
     return (
-        <div className="page-container">
-            <Link to="/admin" className="back-link">Back to Admin</Link>
-            <div className="page-header animate-slide-up"><h1 className="page-title">Manage Quizzes</h1></div>
-
-            {msg && <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--success-soft)', color: 'var(--success)', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-sm)', marginBottom: 'var(--space-4)' }}>{msg}</div>}
-
-            <div className="tabs mb-6" style={{ maxWidth: '400px' }}>
-                <button className={`tab ${tab === 'pending' ? 'active' : ''}`} onClick={() => setTab('pending')}>Pending ({pending.length})</button>
-                <button className={`tab ${tab === 'published' ? 'active' : ''}`} onClick={() => setTab('published')}>Published ({quizzes.length})</button>
-            </div>
-
-            {tab === 'pending' ? (
-                pending.length === 0 ? (
-                    <div className="empty-state"><div className="empty-state-title">No pending quizzes</div><div className="empty-state-text">All quizzes have been reviewed</div></div>
-                ) : (
-                    <div className="flex flex-col gap-4 stagger-children">
-                        {pending.map(q => (
-                            <div key={q.id} className="card-static" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)' }}>
-                                <div className="flex items-center justify-between flex-wrap gap-3">
-                                    <div style={{ flex: 1 }}>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="badge badge-primary">{q.course_code}</span>
-                                            <span className="badge badge-warning">Pending</span>
-                                        </div>
-                                        <h3 style={{ fontWeight: 700, fontSize: 'var(--font-sm)' }}>{q.title}</h3>
-                                        <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
-                                            By {q.creator_name || q.creator_matric} &middot; {q.question_count} questions
-                                        </p>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <button className="btn btn-success btn-sm" onClick={() => approve(q.id)}>Approve</button>
-                                        <button className="btn btn-danger btn-sm" onClick={() => reject(q.id)}>Reject</button>
-                                        <Link to={`/quiz/${q.id}`} className="btn btn-ghost btn-sm">Preview</Link>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )
-            ) : (
-                quizzes.length === 0 ? (
-                    <div className="empty-state"><div className="empty-state-title">No published quizzes</div></div>
-                ) : (
-                    <div className="flex flex-col gap-4 stagger-children">
-                        {quizzes.map(q => (
-                            <div key={q.id} className="card-static" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)' }}>
-                                <div className="flex items-center justify-between flex-wrap gap-3">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="badge badge-primary">{q.course_code}</span>
-                                            <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>{q.times_taken} taken &middot; {q.question_count} questions</span>
-                                        </div>
-                                        <h3 style={{ fontWeight: 700, fontSize: 'var(--font-sm)' }}>{q.title}</h3>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Link to={`/quiz/${q.id}`} className="btn btn-ghost btn-sm">View</Link>
-                                        <button className="btn btn-danger btn-sm" onClick={() => deleteQuiz(q.id)}>Delete</button>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )
+        <>
+            {confirmAction && (
+                <ConfirmModal
+                    title={confirmAction.title}
+                    message={confirmAction.message}
+                    confirmText={confirmAction.confirmText}
+                    variant={confirmAction.variant}
+                    onConfirm={confirmAction.action}
+                    onCancel={() => setConfirmAction(null)}
+                />
             )}
-        </div>
+            <div className="page-container">
+                <Link to="/admin" className="back-link">Back to Admin</Link>
+                <div className="page-header animate-slide-up"><h1 className="page-title">Manage Quizzes</h1></div>
+
+                {msg && <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--success-soft)', color: 'var(--success)', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-sm)', marginBottom: 'var(--space-4)' }}>{msg}</div>}
+
+                <div className="tabs mb-6" style={{ maxWidth: '400px' }}>
+                    <button className={`tab ${tab === 'pending' ? 'active' : ''}`} onClick={() => setTab('pending')}>Pending ({pending.length})</button>
+                    <button className={`tab ${tab === 'published' ? 'active' : ''}`} onClick={() => setTab('published')}>Published ({quizzes.length})</button>
+                </div>
+
+                {tab === 'pending' ? (
+                    pending.length === 0 ? (
+                        <div className="empty-state"><div className="empty-state-title">No pending quizzes</div><div className="empty-state-text">All quizzes have been reviewed</div></div>
+                    ) : (
+                        <div className="flex flex-col gap-4 stagger-children">
+                            {pending.map(q => (
+                                <div key={q.id} className="card-static" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)' }}>
+                                    <div className="flex items-center justify-between flex-wrap gap-3">
+                                        <div style={{ flex: 1 }}>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="badge badge-primary">{q.course_code}</span>
+                                                <span className="badge badge-warning">Pending</span>
+                                            </div>
+                                            <h3 style={{ fontWeight: 700, fontSize: 'var(--font-sm)' }}>{q.title}</h3>
+                                            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
+                                                By {q.creator_name || q.creator_matric} &middot; {q.question_count} questions
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <button className="btn btn-success btn-sm" onClick={() => approve(q.id)}>Approve</button>
+                                            <button className="btn btn-danger btn-sm" onClick={() => reject(q.id)}>Reject</button>
+                                            <Link to={`/quiz/${q.id}`} className="btn btn-ghost btn-sm">Preview</Link>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )
+                ) : (
+                    quizzes.length === 0 ? (
+                        <div className="empty-state"><div className="empty-state-title">No published quizzes</div></div>
+                    ) : (
+                        <div className="flex flex-col gap-4 stagger-children">
+                            {quizzes.map(q => (
+                                <div key={q.id} className="card-static" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)' }}>
+                                    <div className="flex items-center justify-between flex-wrap gap-3">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <span className="badge badge-primary">{q.course_code}</span>
+                                                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>{q.times_taken} taken &middot; {q.question_count} questions</span>
+                                            </div>
+                                            <h3 style={{ fontWeight: 700, fontSize: 'var(--font-sm)' }}>{q.title}</h3>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Link to={`/quiz/${q.id}`} className="btn btn-ghost btn-sm">View</Link>
+                                            <button className="btn btn-danger btn-sm" onClick={() => deleteQuiz(q)}>Delete</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )
+                )}
+            </div>
+        </>
     );
 }
