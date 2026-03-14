@@ -36,9 +36,12 @@ export function setupLiveSocket(io) {
                     return;
                 }
 
-                // Add participant to DB
-                await db.prepare('INSERT OR IGNORE INTO live_participants (session_id, user_id) VALUES (?, ?)')
-                    .run(session.id, socket.user.id);
+                // Add participant to DB only if NOT the host (initially)
+                const isHost = session.host_id === socket.user.id;
+                if (!isHost) {
+                    await db.prepare('INSERT OR IGNORE INTO live_participants (session_id, user_id) VALUES (?, ?)')
+                        .run(session.id, socket.user.id);
+                }
 
                 socket.join(`live:${sessionCode}`);
                 socket.sessionCode = sessionCode;
@@ -52,12 +55,27 @@ export function setupLiveSocket(io) {
                 socket.emit('joined', {
                     session,
                     user: { ...user, id: socket.user.id },
+                    isHost // Inform the client if they are the host
                 });
 
                 io.to(`live:${sessionCode}`).emit('participants-update', participants);
             } catch (err) {
                 console.error('Socket join session error:', err);
                 socket.emit('error', { message: 'Server error joining session' });
+            }
+        });
+
+        // Host/Participant explicitly joins as a player (for hosts who want to participate)
+        socket.on('join-as-player', async () => {
+            try {
+                if (!socket.sessionId || !socket.user) return;
+                await db.prepare('INSERT OR IGNORE INTO live_participants (session_id, user_id) VALUES (?, ?)')
+                    .run(socket.sessionId, socket.user.id);
+
+                const participants = await getParticipants(socket.sessionId);
+                io.to(`live:${socket.sessionCode}`).emit('participants-update', participants);
+            } catch (err) {
+                console.error('Socket join-as-player error:', err);
             }
         });
 
@@ -87,8 +105,11 @@ export function setupLiveSocket(io) {
 
                 io.to(`live:${socket.sessionCode}`).emit('quiz-started', { question_count: questions.length });
 
-                // Send first question
-                await sendNextQuestion(io, socket.sessionCode);
+                // Send first question after 5 seconds to allow for countdown
+                const state = activeSessions.get(socket.sessionCode);
+                state.timer = setTimeout(async () => {
+                    await sendNextQuestion(io, socket.sessionCode);
+                }, 5000);
             } catch (err) {
                 console.error('Socket start quiz error:', err);
             }
