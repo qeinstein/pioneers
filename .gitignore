@@ -4,6 +4,9 @@ node_modules/
 # Production builds
 dist/
 
+# Gemini CLI
+GEMINI.md
+
 # Environment variables
 .env
 .env.local

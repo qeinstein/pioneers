@@ -149,6 +149,13 @@ export default function LiveJoin() {
             setQuestionResults(r);
             setPhase('results');
             clearInterval(timerRef.current);
+            if (!r.is_last) {
+                setCountdown(5);
+                timerRef.current = setInterval(() => setCountdown(c => {
+                    if (c <= 1) { clearInterval(timerRef.current); return 0; }
+                    return c - 1;
+                }), 1000);
+            }
         });
         socket.on('quiz-ended', ({ leaderboard }) => {
             setFinalLeaderboard(leaderboard);
@@ -391,7 +398,7 @@ export default function LiveJoin() {
                             <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: 'var(--font-sm)' }}>{p.total_score}</span>
                         </div>
                     ))}
-                    {!questionResults.is_last && <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginTop: 'var(--space-4)' }}>Next question coming up...</p>}
+                    {!questionResults.is_last && <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginTop: 'var(--space-4)' }}>Next question in {countdown}s...</p>}
                 </div>
             </div>
         );
