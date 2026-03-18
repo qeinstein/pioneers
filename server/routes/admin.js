@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { verifyToken, requireAdmin } from '../middleware/auth.js';
+import { uploadShoutout } from '../cloudinary.js';
 
 const router = Router();
 
@@ -231,6 +232,108 @@ router.get('/pending-quizzes', verifyToken, requireAdmin, async (req, res) => {
         res.json(quizzes.map(q => ({ ...q, tags: JSON.parse(q.tags || '[]') })));
     } catch (err) {
         console.error('Admin pending quizzes error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// GET /api/admin/shoutouts — public (any authenticated user), returns active shoutouts within 7 days
+router.get('/shoutouts', verifyToken, async (req, res) => {
+    try {
+        const users = await db.prepare(`
+            SELECT id, display_name, matric_no, dob, shoutout_url, instagram, twitter
+            FROM users
+            WHERE dob IS NOT NULL AND dob != '' AND shoutout_url IS NOT NULL AND shoutout_url != ''
+        `).all();
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const withDays = users.map(u => {
+            const bday = new Date(u.dob);
+            let next = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
+            if (next < today) next = new Date(today.getFullYear() + 1, bday.getMonth(), bday.getDate());
+            const daysUntil = Math.round((next - today) / (1000 * 60 * 60 * 24));
+            return { ...u, days_until: daysUntil, is_today: daysUntil === 0 };
+        });
+
+        // Return shoutouts within 7 days, sorted by soonest
+        const filtered = withDays.filter(u => u.days_until <= 7).sort((a, b) => a.days_until - b.days_until);
+        res.json(filtered);
+    } catch (err) {
+        console.error('Shoutouts error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// GET /api/admin/birthdays
+router.get('/birthdays', verifyToken, requireAdmin, async (req, res) => {
+    try {
+        const users = await db.prepare(`
+            SELECT id, display_name, matric_no, dob, birthday_pic_url, shoutout_url, instagram, twitter
+            FROM users
+            WHERE dob IS NOT NULL AND dob != ''
+            ORDER BY display_name ASC
+        `).all();
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const withDays = users.map(u => {
+            const bday = new Date(u.dob);
+            let next = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
+            if (next < today) next = new Date(today.getFullYear() + 1, bday.getMonth(), bday.getDate());
+            const daysUntil = Math.round((next - today) / (1000 * 60 * 60 * 24));
+            const isToday = daysUntil === 0;
+            return { ...u, days_until: daysUntil, is_today: isToday };
+        });
+
+        withDays.sort((a, b) => a.days_until - b.days_until);
+
+        res.json(withDays);
+    } catch (err) {
+        console.error('Admin birthdays error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST /api/admin/birthdays/:id/shoutout — upload designed shoutout card for a user
+router.post('/birthdays/:id/shoutout', verifyToken, requireAdmin, uploadShoutout.single('shoutout'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+        const url = req.file.path;
+        await db.prepare('UPDATE users SET shoutout_url = ? WHERE id = ?').run(url, req.params.id);
+
+        // Get celebrant info
+        const celebrant = await db.prepare('SELECT id, display_name, matric_no FROM users WHERE id = ?').get(req.params.id);
+        const name = celebrant?.display_name || celebrant?.matric_no || 'Someone';
+
+        // Notify the celebrant personally
+        await db.prepare('INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)').run(
+            celebrant.id, 'birthday_shoutout', `🎉 Your birthday shoutout is live! Happy Birthday, ${name}!`, celebrant.id
+        );
+
+        // Notify all other users
+        const allUsers = await db.prepare('SELECT id FROM users WHERE id != ?').all(celebrant.id);
+        for (const u of allUsers) {
+            await db.prepare('INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)').run(
+                u.id, 'birthday_shoutout', `🎂 It's ${name}'s birthday! Check out their shoutout on the dashboard.`, celebrant.id
+            );
+        }
+
+        res.json({ shoutout_url: url });
+    } catch (err) {
+        console.error('Admin shoutout upload error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// DELETE /api/admin/birthdays/:id/shoutout — remove shoutout card
+router.delete('/birthdays/:id/shoutout', verifyToken, requireAdmin, async (req, res) => {
+    try {
+        await db.prepare("UPDATE users SET shoutout_url = '' WHERE id = ?").run(req.params.id);
+        res.json({ message: 'Shoutout removed' });
+    } catch (err) {
+        console.error('Admin shoutout delete error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });

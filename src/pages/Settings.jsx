@@ -2,16 +2,22 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Settings() {
-    const { user, token, updateProfile, uploadAvatar, changePassword, darkMode, setDarkMode } = useAuth();
+    const { user, token, updateProfile, uploadAvatar, changePassword, darkMode, setDarkMode, refreshProfile } = useAuth();
     const [displayName, setDisplayName] = useState(user?.display_name || '');
     const [bio, setBio] = useState(user?.bio || '');
+    const [dob, setDob] = useState(user?.dob || '');
+    const [instagram, setInstagram] = useState(user?.instagram || '');
+    const [twitter, setTwitter] = useState(user?.twitter || '');
     const [currentPass, setCurrentPass] = useState('');
     const [newPass, setNewPass] = useState('');
     const [confirmPass, setConfirmPass] = useState('');
     const [msg, setMsg] = useState('');
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
+    const [bdayPicSaving, setBdayPicSaving] = useState(false);
+    const [bdayPicPreview, setBdayPicPreview] = useState(user?.birthday_pic_url || '');
     const fileRef = useRef(null);
+    const bdayPicRef = useRef(null);
 
     // Session management state
     const [sessions, setSessions] = useState([]);
@@ -40,9 +46,44 @@ export default function Settings() {
 
     async function handleProfileSave() {
         setSaving(true); setMsg(''); setError('');
-        try { await updateProfile({ display_name: displayName, bio }); setMsg('Profile updated'); }
+        try { await updateProfile({ display_name: displayName, bio, dob: dob || null, instagram, twitter }); setMsg('Profile updated'); }
         catch (err) { setError(err.message); }
         finally { setSaving(false); }
+    }
+
+    async function handleBirthdayPicChange(e) {
+        const file = e.target.files[0]; if (!file) return;
+        setMsg(''); setError(''); setBdayPicSaving(true);
+        try {
+            const formData = new FormData();
+            formData.append('birthday_pic', file);
+            const res = await fetch('/api/auth/birthday-pic', {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` },
+                body: formData,
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error);
+            setBdayPicPreview(data.birthday_pic_url);
+            await refreshProfile();
+            setMsg('Birthday picture updated');
+        } catch { setError('Failed to upload birthday picture'); }
+        finally { setBdayPicSaving(false); }
+    }
+
+    async function handleDeleteBirthdayPic() {
+        setMsg(''); setError(''); setBdayPicSaving(true);
+        try {
+            const res = await fetch('/api/auth/birthday-pic', {
+                method: 'DELETE',
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error('Failed to delete');
+            setBdayPicPreview('');
+            await refreshProfile();
+            setMsg('Birthday picture removed');
+        } catch { setError('Failed to remove birthday picture'); }
+        finally { setBdayPicSaving(false); }
     }
 
     async function handleAvatarChange(e) {
@@ -121,7 +162,41 @@ export default function Settings() {
                     <label className="form-label">Bio</label>
                     <textarea className="form-textarea" value={bio} onChange={e => setBio(e.target.value)} placeholder="Tell others about yourself..." />
                 </div>
+                <div className="form-group">
+                    <label className="form-label">Date of Birth</label>
+                    <input className="form-input" type="date" value={dob} onChange={e => setDob(e.target.value)} />
+                    <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginTop: 'var(--space-1)' }}>Used for birthday shoutouts on the dashboard.</p>
+                </div>
+                <div className="form-group">
+                    <label className="form-label">Instagram Handle</label>
+                    <input className="form-input" value={instagram} onChange={e => setInstagram(e.target.value)} placeholder="@yourhandle" />
+                </div>
+                <div className="form-group">
+                    <label className="form-label">Twitter / X Handle</label>
+                    <input className="form-input" value={twitter} onChange={e => setTwitter(e.target.value)} placeholder="@yourhandle" />
+                </div>
                 <button className="btn btn-primary" onClick={handleProfileSave} disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</button>
+            </div>
+
+            <div className="card-static mb-6 animate-slide-up" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)', animationDelay: '150ms' }}>
+                <h3 style={{ fontWeight: 700, marginBottom: 'var(--space-1)', fontSize: 'var(--font-base)' }}>Birthday Shoutout Picture</h3>
+                <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginBottom: 'var(--space-4)' }}>This picture will be shown on everyone's dashboard on your birthday.</p>
+                <div className="flex items-center gap-4 flex-wrap">
+                    {bdayPicPreview ? (
+                        <img src={bdayPicPreview} alt="Birthday pic" style={{ width: '80px', height: '80px', objectFit: 'cover', borderRadius: 'var(--radius-lg)', border: '2px solid var(--border-color)' }} />
+                    ) : (
+                        <div style={{ width: '80px', height: '80px', borderRadius: 'var(--radius-lg)', background: 'var(--bg-input)', border: '2px dashed var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>🎂</div>
+                    )}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                        <button className="btn btn-ghost btn-sm" onClick={() => bdayPicRef.current?.click()} disabled={bdayPicSaving}>
+                            {bdayPicSaving ? 'Uploading...' : bdayPicPreview ? 'Replace Picture' : 'Upload Picture'}
+                        </button>
+                        {bdayPicPreview && (
+                            <button className="btn btn-ghost btn-danger btn-sm" onClick={handleDeleteBirthdayPic} disabled={bdayPicSaving}>Remove</button>
+                        )}
+                        <input ref={bdayPicRef} type="file" accept="image/*" onChange={handleBirthdayPicChange} style={{ display: 'none' }} />
+                    </div>
+                </div>
             </div>
 
             <div className="card-static mb-6 animate-slide-up" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)', animationDelay: '200ms' }}>

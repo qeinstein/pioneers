@@ -73,13 +73,14 @@ export default function Navbar() {
             borderBottom: '1px solid var(--glass-border)', zIndex: 100,
             display: 'flex', alignItems: 'center', padding: '0 var(--space-4)',
         }}>
+            <img src="/logo.png" alt="Logo" style={{ width: '36px', height: '36px', borderRadius: '8px', marginRight: 'var(--space-2)' }} />
             <Link to="/" style={{
                 fontWeight: 800, fontSize: 'var(--font-xl)', color: 'var(--text-primary)',
                 background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginRight: 'auto',
                 textDecoration: 'none'
             }}>
-                🎓 Pioneers
+                Pioneers
             </Link>
 
             {/* Desktop nav */}

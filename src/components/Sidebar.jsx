@@ -109,6 +109,7 @@ export default function Sidebar() {
         { to: '/admin/courses', label: 'Courses', icon: Icons.courses },
         { to: '/admin/quizzes', label: 'Quizzes', icon: Icons.quizManage },
         { to: '/admin/approvals', label: 'Approvals', icon: Icons.check },
+        { to: '/admin/birthdays', label: 'Birthdays', icon: Icons.bell },
     ];
 
     const initials = (user?.display_name || user?.matric_no || '?').slice(0, 2).toUpperCase();
@@ -132,8 +133,9 @@ export default function Sidebar() {
                 }}>
                     {Icons.menu}
                 </button>
-                <span className="sidebar-brand">
-                    <span className="sidebar-brand-accent">P</span>ioneers
+                <span className="sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <img src="/logo.png" alt="Logo" style={{ width: '28px', height: '28px', borderRadius: '6px', flexShrink: 0 }} />
+                    <span><span className="sidebar-brand-accent">P</span>ioneers</span>
                 </span>
                 <div style={{ width: '40px' }}></div>
             </div>
@@ -152,8 +154,9 @@ export default function Sidebar() {
                 </button>
 
                 <div className="sidebar-header">
-                    <span className="sidebar-brand">
-                        <span className="sidebar-brand-accent">P</span>ioneers
+                    <span className="sidebar-brand" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <img src="/logo.png" alt="Logo" style={{ width: '28px', height: '28px', borderRadius: '6px', flexShrink: 0 }} />
+                        <span><span className="sidebar-brand-accent">P</span>ioneers</span>
                     </span>
                     <div className="sidebar-header-actions">
                         {/* Theme toggle */}

@@ -1339,17 +1339,28 @@ img {
 /* ========== STREAK ========== */
 .streak-display {
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
-  font-weight: 700;
+  gap: 2px;
+  color: #fff;
+  text-align: center;
+}
+
+.streak-display .streak-number {
+  font-size: 2.8rem;
+  font-weight: 900;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(255, 160, 0, 0.8), 0 2px 4px rgba(0,0,0,0.4);
+  letter-spacing: -1px;
+}
+
+.streak-display .streak-label {
   font-size: var(--font-sm);
-  padding: var(--space-2) var(--space-3);
-  background: linear-gradient(135deg, rgba(255, 140, 0, 0.1) 0%, rgba(255, 69, 0, 0.1) 100%);
-  border: 1px solid rgba(255, 140, 0, 0.2);
-  border-radius: var(--radius-full);
-  color: #ff6a00;
-  box-shadow: 0 4px 12px rgba(255, 106, 0, 0.15);
-  animation: pulse-glow 2s infinite ease-in-out;
+  font-weight: 700;
+  color: #ffb700;
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
 }
 
 .streak-flame {
