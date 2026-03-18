@@ -29,8 +29,8 @@ To maintain database integrity across all environments:
 
 ### Git Workflow
 - **Branching**: Use the format `type/description` (e.g., `feat/add-timer`, `fix/login-bug`).
-- **Commits**: Use conventional commits (e.g., `feat: ...`, `fix: ...`, `docs: ...`).
-- **PRs**: Ensure your code is linted and tested locally before opening a Pull Request.
+- **Commits**: Use conventional commits (e.g., `feat: ...`, `fix: ...`, `docs: ...`, `chore: ...`).
+- **PRs**: Ensure your code is tested locally before opening a Pull Request.
 
 ---
 
