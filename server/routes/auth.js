@@ -49,8 +49,10 @@ router.post('/login', loginLimiter, async (req, res) => {
             user: {
                 id: user.id,
                 matric_no: user.matric_no,
+                username: user.username || null,
                 display_name: user.display_name,
                 bio: user.bio,
+                dob: user.dob || null,
                 profile_pic_url: user.profile_pic_url,
                 role: user.role,
                 is_first_login: user.is_first_login === 1,
