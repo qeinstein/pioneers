@@ -152,6 +152,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         matric_no TEXT UNIQUE NOT NULL,
+        username TEXT UNIQUE DEFAULT NULL,
         password TEXT NOT NULL,
         display_name TEXT DEFAULT '',
         bio TEXT DEFAULT '',
@@ -172,6 +173,7 @@ const createTables = async () => {
       CREATE TABLE IF NOT EXISTS allowed_matrics (
         id SERIAL PRIMARY KEY,
         matric_no TEXT UNIQUE NOT NULL,
+        username TEXT UNIQUE DEFAULT NULL,
         added_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
