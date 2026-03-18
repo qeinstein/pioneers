@@ -54,6 +54,7 @@ router.post('/login', loginLimiter, async (req, res) => {
                 profile_pic_url: user.profile_pic_url,
                 role: user.role,
                 is_first_login: user.is_first_login === 1,
+                dob: user.dob || null,
             }
         });
     } catch (err) {

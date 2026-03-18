@@ -6,7 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import RolePopup from './components/RolePopup';
 
 function DobPrompt() {
-    const { user, token, updateProfile, refreshProfile } = useAuth();
+    const { user, updateProfile } = useAuth();
     const [dob, setDob] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -18,7 +18,7 @@ function DobPrompt() {
         setSaving(true);
         try {
             await updateProfile({ dob });
-            await refreshProfile();
+            // updateProfile already updates user state — no need to refreshProfile
         } catch { setError('Failed to save. Try again.'); }
         finally { setSaving(false); }
     }
