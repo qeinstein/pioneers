@@ -5,6 +5,55 @@ import Sidebar from './components/Sidebar';
 import ProtectedRoute from './components/ProtectedRoute';
 import RolePopup from './components/RolePopup';
 
+function DobPrompt() {
+    const { user, token, updateProfile, refreshProfile } = useAuth();
+    const [dob, setDob] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState('');
+
+    if (!user || user.dob) return null;
+
+    async function handleSave() {
+        if (!dob) { setError('Please enter your date of birth'); return; }
+        setSaving(true);
+        try {
+            await updateProfile({ dob });
+            await refreshProfile();
+        } catch { setError('Failed to save. Try again.'); }
+        finally { setSaving(false); }
+    }
+
+    return (
+        <div style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 2000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem',
+        }}>
+            <div style={{
+                background: 'var(--bg-card-solid)', borderRadius: 'var(--radius-xl)',
+                padding: '2rem', maxWidth: '400px', width: '100%',
+                boxShadow: 'var(--glass-shadow)', textAlign: 'center',
+            }}>
+                <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🎂</div>
+                <h2 style={{ fontWeight: 800, fontSize: 'var(--font-xl)', marginBottom: '0.5rem' }}>One quick thing!</h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)', marginBottom: '1.5rem' }}>
+                    Add your date of birth so we can celebrate your birthday with a shoutout on the dashboard!
+                </p>
+                <input
+                    type="date"
+                    className="form-input"
+                    value={dob}
+                    onChange={e => { setDob(e.target.value); setError(''); }}
+                    style={{ marginBottom: '1rem', textAlign: 'center' }}
+                />
+                {error && <p style={{ color: 'var(--error)', fontSize: 'var(--font-xs)', marginBottom: '0.75rem' }}>{error}</p>}
+                <button className="btn btn-primary" style={{ width: '100%' }} onClick={handleSave} disabled={saving}>
+                    {saving ? 'Saving...' : 'Save Birthday'}
+                </button>
+            </div>
+        </div>
+    );
+}
+
 // Lazy-load all pages for fast initial render
 const Login = lazy(() => import('./pages/Login'));
 const ChangePassword = lazy(() => import('./pages/ChangePassword'));
@@ -30,6 +79,7 @@ const ManageUsers = lazy(() => import('./pages/admin/ManageUsers'));
 const ManageCourses = lazy(() => import('./pages/admin/ManageCourses'));
 const ManageQuizzes = lazy(() => import('./pages/admin/ManageQuizzes'));
 const ManageApprovals = lazy(() => import('./pages/admin/ManageApprovals'));
+const ManageBirthdays = lazy(() => import('./pages/admin/ManageBirthdays'));
 
 function PageLoader() {
     return (
@@ -105,6 +155,7 @@ export default function App() {
 
     return (
         <div data-theme={darkMode ? 'dark' : 'light'}>
+            <DobPrompt />
             <RoleActionChecker>
                 <Suspense fallback={<PageLoader />}>
                     <Routes>
@@ -139,6 +190,7 @@ export default function App() {
                         <Route path="/admin/courses" element={<ProtectedRoute adminOnly><AppLayout><ManageCourses /></AppLayout></ProtectedRoute>} />
                         <Route path="/admin/quizzes" element={<ProtectedRoute adminOnly><AppLayout><ManageQuizzes /></AppLayout></ProtectedRoute>} />
                         <Route path="/admin/approvals" element={<ProtectedRoute adminOnly><AppLayout><ManageApprovals /></AppLayout></ProtectedRoute>} />
+                        <Route path="/admin/birthdays" element={<ProtectedRoute adminOnly><AppLayout><ManageBirthdays /></AppLayout></ProtectedRoute>} />
 
                         <Route path="*" element={<Navigate to="/" />} />
                     </Routes>

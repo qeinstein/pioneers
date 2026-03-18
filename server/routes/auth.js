@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import db from '../db.js';
 import { verifyToken, JWT_SECRET } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/rateLimit.js';
-import { uploadAvatar } from '../cloudinary.js';
+import { uploadAvatar, uploadBirthdayPic } from '../cloudinary.js';
 
 const upload = uploadAvatar;
 
@@ -126,7 +126,7 @@ router.post('/change-password', verifyToken, async (req, res) => {
 router.get('/profile', verifyToken, async (req, res) => {
     try {
         const user = await db.prepare(
-            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, is_first_login, created_at FROM users WHERE id = ?'
+            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, is_first_login, dob, birthday_pic_url, shoutout_url, instagram, twitter, created_at FROM users WHERE id = ?'
         ).get(req.user.id);
 
         if (!user) return res.status(404).json({ error: 'User not found' });
@@ -214,17 +214,41 @@ router.get('/profile/:userId', verifyToken, async (req, res) => {
 // PUT /api/auth/profile
 router.put('/profile', verifyToken, async (req, res) => {
     try {
-        const { display_name, bio } = req.body;
-        await db.prepare('UPDATE users SET display_name = COALESCE(?, display_name), bio = COALESCE(?, bio) WHERE id = ?')
-            .run(display_name, bio, req.user.id);
+        const { display_name, bio, dob, instagram, twitter } = req.body;
+        await db.prepare('UPDATE users SET display_name = COALESCE(?, display_name), bio = COALESCE(?, bio), dob = COALESCE(?, dob), instagram = COALESCE(?, instagram), twitter = COALESCE(?, twitter) WHERE id = ?')
+            .run(display_name, bio, dob || null, instagram ?? null, twitter ?? null, req.user.id);
 
         const user = await db.prepare(
-            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, is_first_login FROM users WHERE id = ?'
+            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, is_first_login, dob, birthday_pic_url, shoutout_url, instagram, twitter FROM users WHERE id = ?'
         ).get(req.user.id);
 
         res.json({ ...user, is_first_login: user.is_first_login === 1 });
     } catch (err) {
         console.error('Update profile error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// POST /api/auth/birthday-pic
+router.post('/birthday-pic', verifyToken, uploadBirthdayPic.single('birthday_pic'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+        const url = req.file.path;
+        await db.prepare('UPDATE users SET birthday_pic_url = ? WHERE id = ?').run(url, req.user.id);
+        res.json({ birthday_pic_url: url });
+    } catch (err) {
+        console.error('Birthday pic upload error:', err);
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// DELETE /api/auth/birthday-pic
+router.delete('/birthday-pic', verifyToken, async (req, res) => {
+    try {
+        await db.prepare("UPDATE users SET birthday_pic_url = '' WHERE id = ?").run(req.user.id);
+        res.json({ message: 'Birthday picture removed' });
+    } catch (err) {
+        console.error('Birthday pic delete error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });

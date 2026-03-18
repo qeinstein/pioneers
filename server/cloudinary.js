@@ -30,7 +30,29 @@ export const marketplaceStorage = new CloudinaryStorage({
     }
 });
 
+// Birthday source picture storage (user's raw photo)
+export const birthdayStorage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+        folder: 'pioneers_birthdays',
+        allowed_formats: ['jpeg', 'png', 'jpg', 'webp'],
+        transformation: [{ width: 800, height: 800, crop: 'limit', quality: 'auto' }]
+    }
+});
+
+// Admin-designed birthday shoutout card storage
+export const shoutoutStorage = new CloudinaryStorage({
+    cloudinary,
+    params: {
+        folder: 'pioneers_shoutouts',
+        allowed_formats: ['jpeg', 'png', 'jpg', 'webp'],
+        transformation: [{ width: 1200, height: 1200, crop: 'limit', quality: 'auto' }]
+    }
+});
+
 export const uploadAvatar = multer({ storage: avatarStorage, limits: { fileSize: 5 * 1024 * 1024 } });
 export const uploadMarketplace = multer({ storage: marketplaceStorage, limits: { fileSize: 5 * 1024 * 1024 } });
+export const uploadBirthdayPic = multer({ storage: birthdayStorage, limits: { fileSize: 5 * 1024 * 1024 } });
+export const uploadShoutout = multer({ storage: shoutoutStorage, limits: { fileSize: 10 * 1024 * 1024 } });
 
 export { cloudinary };

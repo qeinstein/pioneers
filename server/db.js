@@ -158,6 +158,11 @@ const createTables = async () => {
         profile_pic_url TEXT DEFAULT '',
         role TEXT DEFAULT 'student' CHECK (role IN ('student', 'admin')),
         is_first_login INTEGER DEFAULT 1,
+        dob TEXT DEFAULT NULL,
+        birthday_pic_url TEXT DEFAULT '',
+        shoutout_url TEXT DEFAULT '',
+        instagram TEXT DEFAULT '',
+        twitter TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);

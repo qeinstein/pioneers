@@ -7,6 +7,9 @@ dist/
 # Gemini CLI
 GEMINI.md
 
+# Claude CLI
+.claude/
+
 # Environment variables
 .env
 .env.local

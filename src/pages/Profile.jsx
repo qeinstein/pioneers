@@ -43,12 +43,9 @@ export default function Profile() {
                 {profile.streak && profile.streak.current_streak > 0 && (
                     <div className="mt-4" style={{ display: 'flex', justifyContent: 'center' }}>
                         <div className="streak-display">
-                            <span className="streak-flame">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none">
-                                    <path d="M12 2c0 0-5 5-5 11 0 2.76 2.24 5 5 5s5-2.24 5-5c0-6-5-11-5-11zm0 14c-1.66 0-3-1.34-3-3 0-2 3-5.4 3-5.4s3 3.4 3 5.4c0 1.66-1.34 3-3 3z" />
-                                </svg>
-                            </span>
-                            <span>{profile.streak.current_streak} Day Streak!</span>
+                            <video src="/streak-fire.webm" autoPlay loop muted playsInline style={{ width: '64px', height: '64px', objectFit: 'cover', filter: 'drop-shadow(0 0 10px rgba(255,120,0,0.9))' }} />
+                            <span className="streak-number">{profile.streak.current_streak}</span>
+                            <span className="streak-label">day streak!</span>
                             <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)', marginLeft: 'var(--space-2)' }}>(Best: {profile.streak.longest_streak})</span>
                         </div>
                     </div>
