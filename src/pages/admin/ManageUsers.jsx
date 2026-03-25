@@ -16,6 +16,7 @@ export default function ManageUsers() {
     const [rangeEnd, setRangeEnd] = useState('');
     const [msg, setMsg] = useState('');
     const [confirmAction, setConfirmAction] = useState(null);
+    const [search, setSearch] = useState('');
 
     useEffect(() => {
         Promise.all([
@@ -114,21 +115,30 @@ export default function ManageUsers() {
                 {msg && <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--success-soft)', color: 'var(--success)', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-sm)', marginBottom: 'var(--space-4)' }}>{msg}</div>}
 
                 {tab === 'users' ? (
-                    <div className="table-container animate-slide-up">
-                        <table className="table">
-                            <thead><tr><th>User</th><th>Role</th><th>Attempts</th><th>Joined</th><th>Actions</th></tr></thead>
-                            <tbody>
-                                {users.map(u => (
-                                    <tr key={u.id}>
-                                        <td>
-                                            <div style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{u.display_name || u.matric_no}</div>
-                                            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>{u.matric_no}</div>
-                                        </td>
-                                        <td><span className={`badge ${u.role === 'admin' ? 'badge-warning' : 'badge-info'}`}>{u.role}</span></td>
-                                        <td style={{ fontSize: 'var(--font-sm)' }}>{u.quiz_attempts}</td>
-                                        <td style={{ fontSize: 'var(--font-xs)' }}>{new Date(u.created_at).toLocaleDateString()}</td>
-                                        <td>
-                                            <div className="flex gap-2">
+                    <div className="animate-slide-up">
+                        <input
+                            className="form-input mb-4"
+                            placeholder="Search by matric no or name..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                        />
+                        {(() => {
+                            const q = search.toLowerCase();
+                            const filtered = users.filter(u => !q || u.matric_no?.toLowerCase().includes(q) || u.display_name?.toLowerCase().includes(q) || u.username?.toLowerCase().includes(q));
+                            return (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+                                    {filtered.map(u => (
+                                        <div key={u.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-4)', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 'var(--space-3)' }}>
+                                            <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+                                                <div style={{ fontWeight: 600, fontSize: 'var(--font-sm)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.display_name || u.matric_no}</div>
+                                                <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>{u.matric_no}</div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap', flexShrink: 0 }}>
+                                                <span className={`badge ${u.role === 'admin' ? 'badge-warning' : 'badge-info'}`}>{u.role}</span>
+                                                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>{u.quiz_attempts} attempts</span>
+                                                <span style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>{new Date(u.created_at).toLocaleDateString()}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: 'var(--space-2)', flexShrink: 0 }}>
                                                 {u.role === 'student' && !u.pending_admin ? (
                                                     <button className="btn btn-ghost btn-sm" onClick={() => changeRole(u, 'admin')}>Promote</button>
                                                 ) : u.pending_admin ? (
@@ -138,11 +148,14 @@ export default function ManageUsers() {
                                                 )}
                                                 <button className="btn btn-ghost btn-sm" onClick={() => resetPassword(u)}>Reset Pass</button>
                                             </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        </div>
+                                    ))}
+                                    {filtered.length === 0 && (
+                                        <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-sm)', padding: 'var(--space-6)' }}>No users found</div>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
                 ) : (
                     <div className="animate-slide-up">
