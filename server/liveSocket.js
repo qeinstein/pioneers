@@ -5,6 +5,18 @@ import { JWT_SECRET } from './middleware/auth.js';
 // In-memory session state for active live quizzes
 const activeSessions = new Map();
 
+// In-memory ready state: sessionCode -> Set of ready user_ids
+const readySessions = new Map();
+
+async function broadcastParticipants(io, code, sessionId) {
+    const participants = await getParticipants(sessionId);
+    const readySet = readySessions.get(code) || new Set();
+    const readyStrings = new Set([...readySet].map(String));
+    const withReady = participants.map(p => ({ ...p, is_ready: readyStrings.has(String(p.user_id)) }));
+    io.to(`live:${code}`).emit('participants-update', withReady);
+    return withReady;
+}
+
 export function setupLiveSocket(io) {
     io.use((socket, next) => {
         const token = socket.handshake.auth.token;
@@ -49,16 +61,13 @@ export function setupLiveSocket(io) {
 
                 const user = await db.prepare('SELECT display_name, matric_no, profile_pic_url FROM users WHERE id = ?').get(socket.user.id);
 
-                // Get updated participant list
-                const participants = await getParticipants(session.id);
-
                 socket.emit('joined', {
                     session,
                     user: { ...user, id: socket.user.id },
                     isHost // Inform the client if they are the host
                 });
 
-                io.to(`live:${sessionCode}`).emit('participants-update', participants);
+                await broadcastParticipants(io, sessionCode, session.id);
             } catch (err) {
                 console.error('Socket join session error:', err);
                 socket.emit('error', { message: 'Server error joining session' });
@@ -72,10 +81,33 @@ export function setupLiveSocket(io) {
                 await db.prepare('INSERT OR IGNORE INTO live_participants (session_id, user_id) VALUES (?, ?)')
                     .run(socket.sessionId, socket.user.id);
 
-                const participants = await getParticipants(socket.sessionId);
-                io.to(`live:${socket.sessionCode}`).emit('participants-update', participants);
+                await broadcastParticipants(io, socket.sessionCode, socket.sessionId);
             } catch (err) {
                 console.error('Socket join-as-player error:', err);
+            }
+        });
+
+        // Player marks themselves as ready
+        socket.on('player-ready', async () => {
+            try {
+                if (!socket.sessionCode || !socket.sessionId) return;
+                const code = socket.sessionCode;
+                if (!readySessions.has(code)) readySessions.set(code, new Set());
+                readySessions.get(code).add(String(socket.user.id));
+                await broadcastParticipants(io, code, socket.sessionId);
+            } catch (err) {
+                console.error('Socket player-ready error:', err);
+            }
+        });
+
+        // Player unmarks ready
+        socket.on('player-unready', async () => {
+            try {
+                if (!socket.sessionCode || !socket.sessionId) return;
+                readySessions.get(socket.sessionCode)?.delete(String(socket.user.id));
+                await broadcastParticipants(io, socket.sessionCode, socket.sessionId);
+            } catch (err) {
+                console.error('Socket player-unready error:', err);
             }
         });
 
@@ -198,8 +230,9 @@ export function setupLiveSocket(io) {
         socket.on('disconnect', async () => {
             if (socket.sessionCode && socket.sessionId) {
                 try {
-                    const participants = await getParticipants(socket.sessionId);
-                    io.to(`live:${socket.sessionCode}`).emit('participants-update', participants);
+                    // Remove from ready set
+                    readySessions.get(socket.sessionCode)?.delete(String(socket.user.id));
+                    await broadcastParticipants(io, socket.sessionCode, socket.sessionId);
                 } catch (err) {
                     console.error('Socket disconnect update error:', err);
                 }
@@ -314,6 +347,7 @@ async function endQuiz(io, code) {
         io.to(`live:${code}`).emit('quiz-ended', { leaderboard: finalLeaderboard });
 
         activeSessions.delete(code);
+        readySessions.delete(code);
     } catch (err) {
         console.error('Socket end quiz error:', err);
     }
