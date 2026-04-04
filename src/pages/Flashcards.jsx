@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { getTotalPages, parsePaginatedResponse } from '../utils/pagination';
 
 // Colorful gradients for decks
 const DECK_COLORS = [
@@ -28,21 +29,30 @@ export default function Flashcards() {
     const [cardsText, setCardsText] = useState('[\n  {"front": "Question 1", "back": "Answer 1"},\n  {"front": "Question 2", "back": "Answer 2"}\n]');
     const [submitting, setSubmitting] = useState(false);
     const [msg, setMsg] = useState('');
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+    const [openingDeckId, setOpeningDeckId] = useState(null);
+    const pageSize = 24;
 
     useEffect(() => {
+        setLoading(true);
         Promise.all([
-            fetch('/api/flashcards', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+            fetchDecks(),
             fetch('/api/courses', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
         ]).then(([d, c]) => {
             setDecks(d);
             setCourses(c);
             setLoading(false);
         });
-    }, [token]);
+    }, [token, page]);
 
     async function fetchDecks() {
-        const res = await fetch('/api/flashcards', { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) setDecks(await res.json());
+        const res = await fetch(`/api/flashcards?page=${page}&limit=${pageSize}`, { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return [];
+        const { items, total: totalItems } = await parsePaginatedResponse(res);
+        setTotal(totalItems);
+        setDecks(items);
+        return items;
     }
 
     async function handleSubmit(e) {
@@ -97,9 +107,25 @@ export default function Flashcards() {
         } catch { }
     }
 
+    async function openDeck(deck, gradient) {
+        setOpeningDeckId(deck.id);
+        try {
+            const res = await fetch(`/api/flashcards/${deck.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (!res.ok) return;
+            const detail = await res.json();
+            setActiveDeck({ ...detail, gradient });
+        } finally {
+            setOpeningDeckId(null);
+        }
+    }
+
     if (activeDeck) {
         return <FlashcardViewer deck={activeDeck} onBack={() => setActiveDeck(null)} />;
     }
+
+    const totalPages = getTotalPages(total, pageSize);
 
     return (
         <div className="page-container flex flex-col gap-6">
@@ -184,7 +210,7 @@ export default function Flashcards() {
                                 overflow: 'hidden',
                                 transition: 'transform 0.2s, box-shadow 0.2s',
                             }}
-                                onClick={() => deck.status === 'approved' && setActiveDeck({ ...deck, gradient })}
+                                onClick={() => deck.status === 'approved' && openDeck(deck, gradient)}
                                 onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
                                 onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
                             >
@@ -205,7 +231,7 @@ export default function Flashcards() {
                                     <div>
                                         <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 700 }}>{deck.title}</h3>
                                         <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', marginTop: 'var(--space-1)' }}>
-                                            {deck.cards?.length || 0} cards • By {deck.display_name}
+                                            {deck.card_count || 0} cards • By {deck.display_name}
                                         </div>
                                     </div>
 
@@ -221,6 +247,12 @@ export default function Flashcards() {
                                         </p>
                                     )}
 
+                                    {openingDeckId === deck.id && (
+                                        <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)' }}>
+                                            Loading deck...
+                                        </div>
+                                    )}
+
                                     {(user.id === deck.user_id || user.role === 'admin') && (
                                         <div style={{ marginTop: 'auto', paddingTop: 'var(--space-3)', borderTop: '1px solid var(--border-color)' }}>
                                             <button className="btn btn-ghost btn-danger btn-sm" onClick={(e) => { e.stopPropagation(); handleDelete(deck.id); }}>
@@ -232,6 +264,20 @@ export default function Flashcards() {
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {!loading && totalPages > 1 && (
+                <div className="flex items-center justify-between">
+                    <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                        Previous
+                    </button>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+                        Page {page} of {totalPages}
+                    </span>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                        Next
+                    </button>
                 </div>
             )}
         </div>

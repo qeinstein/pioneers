@@ -2,8 +2,20 @@ import { Router } from 'express';
 import db from '../db.js';
 import { verifyToken, requireAdmin } from '../middleware/auth.js';
 import { uploadShoutout } from '../cloudinary.js';
+import { getPagination, setPaginationHeaders } from '../utils/pagination.js';
 
 const router = Router();
+
+async function createSystemNotification({ type, message, referenceId = null, excludeUserId = null, expiresInDays = null }) {
+    const expiresAt = expiresInDays
+        ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
+        : null;
+
+    await db.prepare(`
+        INSERT INTO system_notifications (type, message, reference_id, exclude_user_id, expires_at)
+        VALUES (?, ?, ?, ?, ?)
+    `).run(type, message, referenceId, excludeUserId, expiresAt);
+}
 
 // GET /api/admin/stats
 router.get('/stats', verifyToken, requireAdmin, async (req, res) => {
@@ -25,12 +37,44 @@ router.get('/stats', verifyToken, requireAdmin, async (req, res) => {
 // GET /api/admin/users
 router.get('/users', verifyToken, requireAdmin, async (req, res) => {
     try {
+        const { search = '' } = req.query;
+        const { page, limit, offset } = getPagination(req.query, { defaultLimit: 25, maxLimit: 100 });
+        const filters = [];
+        const params = [];
+
+        if (search.trim()) {
+            filters.push('(display_name ILIKE ? OR matric_no ILIKE ?)');
+            params.push(`%${search.trim()}%`, `%${search.trim()}%`);
+        }
+
+        const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+        const countRow = await db.prepare(`
+            SELECT COUNT(*) as count
+            FROM users
+            ${whereClause}
+        `).get(...params);
+
         const users = await db.prepare(`
-      SELECT id, matric_no, display_name, role, is_first_login, created_at,
-        (SELECT COUNT(*) FROM attempts WHERE user_id = users.id) as quiz_attempts
-      FROM users
-      ORDER BY created_at DESC
-    `).all();
+            SELECT id, matric_no, display_name, role, is_first_login, created_at,
+              (SELECT COUNT(*) FROM attempts WHERE user_id = users.id) as quiz_attempts,
+              EXISTS (
+                SELECT 1
+                FROM pending_role_changes prc
+                WHERE prc.user_id = users.id
+                  AND prc.status = 'pending'
+                  AND prc.new_role = 'admin'
+              ) as pending_admin
+            FROM users
+            ${whereClause}
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        `).all(...params, limit, offset);
+
+        setPaginationHeaders(res, {
+            page,
+            limit,
+            total: countRow ? Number(countRow.count) : 0,
+        });
         res.json(users);
     } catch (err) {
         console.error('Admin users error:', err);
@@ -120,12 +164,37 @@ router.delete('/users/:id', verifyToken, requireAdmin, async (req, res) => {
 // GET /api/admin/allowed-matrics
 router.get('/allowed-matrics', verifyToken, requireAdmin, async (req, res) => {
     try {
+        const { search = '' } = req.query;
+        const { page, limit, offset } = getPagination(req.query, { defaultLimit: 50, maxLimit: 200 });
+        const filters = [];
+        const params = [];
+
+        if (search.trim()) {
+            filters.push('am.matric_no ILIKE ?');
+            params.push(`%${search.trim()}%`);
+        }
+
+        const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+        const countRow = await db.prepare(`
+            SELECT COUNT(*) as count
+            FROM allowed_matrics am
+            ${whereClause}
+        `).get(...params);
+
         const matrics = await db.prepare(`
-      SELECT am.*, u.display_name as added_by_name
-      FROM allowed_matrics am
-      LEFT JOIN users u ON am.added_by = u.id
-      ORDER BY am.matric_no ASC
-    `).all();
+            SELECT am.*, u.display_name as added_by_name
+            FROM allowed_matrics am
+            LEFT JOIN users u ON am.added_by = u.id
+            ${whereClause}
+            ORDER BY am.matric_no ASC
+            LIMIT ? OFFSET ?
+        `).all(...params, limit, offset);
+
+        setPaginationHeaders(res, {
+            page,
+            limit,
+            total: countRow ? Number(countRow.count) : 0,
+        });
         res.json(matrics);
     } catch (err) {
         console.error('Admin allowed matrics error:', err);
@@ -219,15 +288,29 @@ router.put('/quizzes/:id/reject', verifyToken, requireAdmin, async (req, res) =>
 // GET /api/admin/pending-quizzes
 router.get('/pending-quizzes', verifyToken, requireAdmin, async (req, res) => {
     try {
+        const { page, limit, offset } = getPagination(req.query, { defaultLimit: 10, maxLimit: 100 });
+        const countRow = await db.prepare(`
+            SELECT COUNT(*) as count
+            FROM quizzes
+            WHERE status = 'pending'
+        `).get();
+
         const quizzes = await db.prepare(`
-      SELECT q.*, c.course_code, c.course_name, u.display_name as creator_name, u.matric_no as creator_matric,
-        (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) as question_count
-      FROM quizzes q
-      JOIN courses c ON q.course_id = c.id
-      LEFT JOIN users u ON q.created_by = u.id
-      WHERE q.status = 'pending'
-      ORDER BY q.created_at ASC
-    `).all();
+            SELECT q.*, c.course_code, c.course_name, u.display_name as creator_name, u.matric_no as creator_matric,
+              (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) as question_count
+            FROM quizzes q
+            JOIN courses c ON q.course_id = c.id
+            LEFT JOIN users u ON q.created_by = u.id
+            WHERE q.status = 'pending'
+            ORDER BY q.created_at ASC
+            LIMIT ? OFFSET ?
+        `).all(limit, offset);
+
+        setPaginationHeaders(res, {
+            page,
+            limit,
+            total: countRow ? Number(countRow.count) : 0,
+        });
 
         res.json(quizzes.map(q => ({ ...q, tags: JSON.parse(q.tags || '[]') })));
     } catch (err) {
@@ -239,26 +322,52 @@ router.get('/pending-quizzes', verifyToken, requireAdmin, async (req, res) => {
 // GET /api/admin/shoutouts — public (any authenticated user), returns active shoutouts within 7 days
 router.get('/shoutouts', verifyToken, async (req, res) => {
     try {
-        const users = await db.prepare(`
-            SELECT id, display_name, matric_no, dob, shoutout_url, instagram, twitter
-            FROM users
-            WHERE dob IS NOT NULL AND dob != '' AND shoutout_url IS NOT NULL AND shoutout_url != ''
-        `).all();
+        const { limit } = getPagination(req.query, { defaultLimit: 20, maxLimit: 50 });
+        const rows = await db.prepare(`
+            WITH base AS (
+                SELECT id, display_name, matric_no, dob, shoutout_url, instagram, twitter, dob::date AS dob_date
+                FROM users
+                WHERE dob IS NOT NULL
+                  AND dob != ''
+                  AND shoutout_url IS NOT NULL
+                  AND shoutout_url != ''
+            ),
+            ranked AS (
+                SELECT *,
+                    CASE
+                        WHEN make_date(
+                            EXTRACT(YEAR FROM CURRENT_DATE)::int,
+                            EXTRACT(MONTH FROM dob_date)::int,
+                            EXTRACT(DAY FROM dob_date)::int
+                        ) < CURRENT_DATE
+                        THEN (make_date(
+                            EXTRACT(YEAR FROM CURRENT_DATE)::int,
+                            EXTRACT(MONTH FROM dob_date)::int,
+                            EXTRACT(DAY FROM dob_date)::int
+                        ) + INTERVAL '1 year')::date
+                        ELSE make_date(
+                            EXTRACT(YEAR FROM CURRENT_DATE)::int,
+                            EXTRACT(MONTH FROM dob_date)::int,
+                            EXTRACT(DAY FROM dob_date)::int
+                        )
+                    END AS next_birthday
+                FROM base
+            )
+            SELECT
+                id, display_name, matric_no, dob, shoutout_url, instagram, twitter,
+                (next_birthday - CURRENT_DATE) AS days_until,
+                ((next_birthday - CURRENT_DATE) = 0) AS is_today
+            FROM ranked
+            WHERE (next_birthday - CURRENT_DATE) <= 7
+            ORDER BY days_until ASC
+            LIMIT ?
+        `).all(limit);
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const withDays = users.map(u => {
-            const bday = new Date(u.dob);
-            let next = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
-            if (next < today) next = new Date(today.getFullYear() + 1, bday.getMonth(), bday.getDate());
-            const daysUntil = Math.round((next - today) / (1000 * 60 * 60 * 24));
-            return { ...u, days_until: daysUntil, is_today: daysUntil === 0 };
-        });
-
-        // Return shoutouts within 7 days, sorted by soonest
-        const filtered = withDays.filter(u => u.days_until <= 7).sort((a, b) => a.days_until - b.days_until);
-        res.json(filtered);
+        res.json(rows.map(row => ({
+            ...row,
+            days_until: Number(row.days_until),
+            is_today: row.is_today === true || row.is_today === 1,
+        })));
     } catch (err) {
         console.error('Shoutouts error:', err);
         res.status(500).json({ error: 'Server error' });
@@ -268,28 +377,71 @@ router.get('/shoutouts', verifyToken, async (req, res) => {
 // GET /api/admin/birthdays
 router.get('/birthdays', verifyToken, requireAdmin, async (req, res) => {
     try {
-        const users = await db.prepare(`
-            SELECT id, display_name, matric_no, dob, birthday_pic_url, shoutout_url, instagram, twitter
+        const { search = '' } = req.query;
+        const { page, limit, offset } = getPagination(req.query, { defaultLimit: 100, maxLimit: 200 });
+        const filters = ["dob IS NOT NULL", "dob != ''"];
+        const params = [];
+
+        if (search.trim()) {
+            filters.push('(display_name ILIKE ? OR matric_no ILIKE ?)');
+            params.push(`%${search.trim()}%`, `%${search.trim()}%`);
+        }
+
+        const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+        const countRow = await db.prepare(`
+            SELECT COUNT(*) as count
             FROM users
-            WHERE dob IS NOT NULL AND dob != ''
-            ORDER BY display_name ASC
-        `).all();
+            ${whereClause}
+        `).get(...params);
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const rows = await db.prepare(`
+            WITH base AS (
+                SELECT
+                    id, display_name, matric_no, dob, birthday_pic_url, shoutout_url, instagram, twitter, dob::date AS dob_date
+                FROM users
+                ${whereClause}
+            ),
+            ranked AS (
+                SELECT *,
+                    CASE
+                        WHEN make_date(
+                            EXTRACT(YEAR FROM CURRENT_DATE)::int,
+                            EXTRACT(MONTH FROM dob_date)::int,
+                            EXTRACT(DAY FROM dob_date)::int
+                        ) < CURRENT_DATE
+                        THEN (make_date(
+                            EXTRACT(YEAR FROM CURRENT_DATE)::int,
+                            EXTRACT(MONTH FROM dob_date)::int,
+                            EXTRACT(DAY FROM dob_date)::int
+                        ) + INTERVAL '1 year')::date
+                        ELSE make_date(
+                            EXTRACT(YEAR FROM CURRENT_DATE)::int,
+                            EXTRACT(MONTH FROM dob_date)::int,
+                            EXTRACT(DAY FROM dob_date)::int
+                        )
+                    END AS next_birthday
+                FROM base
+            )
+            SELECT
+                id, display_name, matric_no, dob, birthday_pic_url, shoutout_url, instagram, twitter,
+                (next_birthday - CURRENT_DATE) AS days_until,
+                ((next_birthday - CURRENT_DATE) = 0) AS is_today
+            FROM ranked
+            ORDER BY days_until ASC, display_name ASC
+            LIMIT ? OFFSET ?
+        `).all(...params, limit, offset);
 
-        const withDays = users.map(u => {
-            const bday = new Date(u.dob);
-            let next = new Date(today.getFullYear(), bday.getMonth(), bday.getDate());
-            if (next < today) next = new Date(today.getFullYear() + 1, bday.getMonth(), bday.getDate());
-            const daysUntil = Math.round((next - today) / (1000 * 60 * 60 * 24));
-            const isToday = daysUntil === 0;
-            return { ...u, days_until: daysUntil, is_today: isToday };
+        setPaginationHeaders(res, {
+            page,
+            limit,
+            total: countRow ? Number(countRow.count) : 0,
         });
 
-        withDays.sort((a, b) => a.days_until - b.days_until);
-
-        res.json(withDays);
+        res.json(rows.map(row => ({
+            ...row,
+            days_until: Number(row.days_until),
+            is_today: row.is_today === true || row.is_today === 1,
+        })));
     } catch (err) {
         console.error('Admin birthdays error:', err);
         res.status(500).json({ error: 'Server error' });
@@ -312,13 +464,13 @@ router.post('/birthdays/:id/shoutout', verifyToken, requireAdmin, uploadShoutout
             celebrant.id, 'birthday_shoutout', `🎉 Your birthday shoutout is live! Happy Birthday, ${name}!`, celebrant.id
         );
 
-        // Notify all other users
-        const allUsers = await db.prepare('SELECT id FROM users WHERE id != ?').all(celebrant.id);
-        for (const u of allUsers) {
-            await db.prepare('INSERT INTO notifications (user_id, type, message, reference_id) VALUES (?, ?, ?, ?)').run(
-                u.id, 'birthday_shoutout', `🎂 It's ${name}'s birthday! Check out their shoutout on the dashboard.`, celebrant.id
-            );
-        }
+        await createSystemNotification({
+            type: 'birthday_shoutout',
+            message: `🎂 It's ${name}'s birthday! Check out their shoutout on the dashboard.`,
+            referenceId: celebrant.id,
+            excludeUserId: celebrant.id,
+            expiresInDays: 14,
+        });
 
         res.json({ shoutout_url: url });
     } catch (err) {

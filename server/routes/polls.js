@@ -1,59 +1,111 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { verifyToken, requireAdmin } from '../middleware/auth.js';
+import { getPagination, setPaginationHeaders } from '../utils/pagination.js';
 
 const router = Router();
 
-// GET /api/polls — list all polls (active first, then closed)
+async function createSystemNotification({ type, message, referenceId = null, expiresInDays = null }) {
+    const expiresAt = expiresInDays
+        ? new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString()
+        : null;
+
+    await db.prepare(`
+        INSERT INTO system_notifications (type, message, reference_id, expires_at)
+        VALUES (?, ?, ?, ?)
+    `).run(type, message, referenceId, expiresAt);
+}
+
 router.get('/', verifyToken, async (req, res) => {
     try {
-        const polls = await db.prepare(`
-            SELECT p.*, u.display_name as creator_name,
-                   (SELECT COUNT(*) FROM poll_votes pv WHERE pv.poll_id = p.id) as total_votes
-            FROM polls p
-            JOIN users u ON p.created_by = u.id
-            ORDER BY p.is_active DESC, p.created_at DESC
-        `).all();
+        const { page, limit, offset } = getPagination(req.query, { defaultLimit: 20, maxLimit: 50 });
+        const countRow = await db.prepare('SELECT COUNT(*) as count FROM polls').get();
 
-        // For each poll, get options and vote counts
-        const result = [];
-        for (const poll of polls) {
-            const options = await db.prepare(`
-                SELECT po.*, 
-                       (SELECT COUNT(*) FROM poll_votes pv WHERE pv.option_id = po.id) as vote_count
-                FROM poll_options po
-                WHERE po.poll_id = $1
-                ORDER BY po.id ASC
-            `).all(poll.id);
+        const rows = await db.query(`
+            WITH paged_polls AS (
+                SELECT p.*, u.display_name as creator_name
+                FROM polls p
+                JOIN users u ON p.created_by = u.id
+                ORDER BY p.is_active DESC, p.created_at DESC
+                LIMIT $2 OFFSET $3
+            ),
+            user_vote AS (
+                SELECT poll_id, option_id
+                FROM poll_votes
+                WHERE user_id = $1
+            )
+            SELECT
+                p.id,
+                p.title,
+                p.description,
+                p.created_by,
+                p.is_public,
+                p.is_active,
+                p.created_at,
+                p.creator_name,
+                po.id as option_id,
+                po.option_text,
+                COUNT(pv.id) as vote_count,
+                uv.option_id as user_voted_option,
+                (
+                    SELECT COUNT(*)
+                    FROM poll_votes pv_total
+                    WHERE pv_total.poll_id = p.id
+                ) as total_votes
+            FROM paged_polls p
+            LEFT JOIN poll_options po ON po.poll_id = p.id
+            LEFT JOIN poll_votes pv ON pv.option_id = po.id
+            LEFT JOIN user_vote uv ON uv.poll_id = p.id
+            GROUP BY
+                p.id, p.title, p.description, p.created_by, p.is_public, p.is_active, p.created_at,
+                p.creator_name, po.id, po.option_text, uv.option_id
+            ORDER BY p.is_active DESC, p.created_at DESC, po.id ASC
+        `, [req.user.id, limit, offset]);
 
-            // Check if current user has voted
-            const userVote = await db.prepare(
-                'SELECT option_id FROM poll_votes WHERE poll_id = $1 AND user_id = $2'
-            ).get(poll.id, req.user.id);
+        const pollsById = new Map();
+        for (const row of rows.rows) {
+            let poll = pollsById.get(row.id);
+            if (!poll) {
+                const canSeeResults = req.user.role === 'admin' || Number(row.is_public) === 1;
+                poll = {
+                    id: row.id,
+                    title: row.title,
+                    description: row.description,
+                    created_by: row.created_by,
+                    is_public: row.is_public,
+                    is_active: row.is_active,
+                    created_at: row.created_at,
+                    creator_name: row.creator_name,
+                    options: [],
+                    user_voted_option: row.user_voted_option || null,
+                    can_see_results: canSeeResults,
+                    total_votes: Number(row.total_votes),
+                };
+                pollsById.set(row.id, poll);
+            }
 
-            // Only include vote counts if admin or results are public
-            const canSeeResults = req.user.role === 'admin' || poll.is_public === 1;
-
-            result.push({
-                ...poll,
-                options: options.map(o => ({
-                    ...o,
-                    vote_count: canSeeResults ? Number(o.vote_count) : undefined
-                })),
-                user_voted_option: userVote ? userVote.option_id : null,
-                can_see_results: canSeeResults,
-                total_votes: Number(poll.total_votes)
-            });
+            if (row.option_id) {
+                poll.options.push({
+                    id: row.option_id,
+                    option_text: row.option_text,
+                    vote_count: poll.can_see_results ? Number(row.vote_count) : undefined,
+                });
+            }
         }
 
-        res.json(result);
+        setPaginationHeaders(res, {
+            page,
+            limit,
+            total: countRow ? Number(countRow.count) : 0,
+        });
+
+        res.json([...pollsById.values()]);
     } catch (err) {
         console.error('Get polls error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-// POST /api/polls — create a new poll (admin only)
 router.post('/', verifyToken, requireAdmin, async (req, res) => {
     try {
         const { title, description, options } = req.body;
@@ -66,7 +118,6 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
         ).run(title, description || '', req.user.id);
 
         const pollId = result.lastInsertRowid;
-
         for (const optionText of options) {
             if (optionText.trim()) {
                 await db.prepare(
@@ -75,12 +126,12 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
             }
         }
 
-        // Notify all standard users about the new poll
-        const users = await db.prepare("SELECT id FROM users WHERE role = 'student'").all();
-        const notifyStmt = db.prepare('INSERT INTO notifications (user_id, type, message) VALUES ($1, $2, $3)');
-        for (const user of users) {
-            notifyStmt.run(user.id, 'poll', `New Poll Available: "${title}"`);
-        }
+        await createSystemNotification({
+            type: 'poll',
+            message: `New Poll Available: "${title}"`,
+            referenceId: pollId,
+            expiresInDays: 30,
+        });
 
         res.status(201).json({ message: 'Poll created', id: pollId });
     } catch (err) {
@@ -89,7 +140,6 @@ router.post('/', verifyToken, requireAdmin, async (req, res) => {
     }
 });
 
-// POST /api/polls/:id/vote — cast a vote
 router.post('/:id/vote', verifyToken, async (req, res) => {
     try {
         const { option_id } = req.body;
@@ -97,12 +147,10 @@ router.post('/:id/vote', verifyToken, async (req, res) => {
             return res.status(400).json({ error: 'Option ID is required' });
         }
 
-        // Check poll exists and is active
         const poll = await db.prepare('SELECT * FROM polls WHERE id = $1').get(req.params.id);
         if (!poll) return res.status(404).json({ error: 'Poll not found' });
         if (!poll.is_active) return res.status(400).json({ error: 'This poll is closed' });
 
-        // Check option belongs to this poll
         const option = await db.prepare(
             'SELECT * FROM poll_options WHERE id = $1 AND poll_id = $2'
         ).get(option_id, req.params.id);
@@ -114,20 +162,19 @@ router.post('/:id/vote', verifyToken, async (req, res) => {
 
         if (existing) {
             return res.status(400).json({ error: 'You have already voted on this poll' });
-        } else {
-            // Insert new vote
-            await db.prepare(
-                'INSERT INTO poll_votes (poll_id, option_id, user_id) VALUES ($1, $2, $3)'
-            ).run(req.params.id, option_id, req.user.id);
-            res.json({ message: 'Vote recorded' });
         }
+
+        await db.prepare(
+            'INSERT INTO poll_votes (poll_id, option_id, user_id) VALUES ($1, $2, $3)'
+        ).run(req.params.id, option_id, req.user.id);
+
+        res.json({ message: 'Vote recorded' });
     } catch (err) {
         console.error('Vote error:', err);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
-// PUT /api/polls/:id — update poll settings (admin only)
 router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
     try {
         const { is_public, is_active } = req.body;
@@ -149,7 +196,6 @@ router.put('/:id', verifyToken, requireAdmin, async (req, res) => {
     }
 });
 
-// DELETE /api/polls/:id — delete a poll (admin only)
 router.delete('/:id', verifyToken, requireAdmin, async (req, res) => {
     try {
         const result = await db.prepare('DELETE FROM polls WHERE id = $1').run(req.params.id);

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { verifyToken, requireAdmin } from '../middleware/auth.js';
 import { uploadMarketplace } from '../cloudinary.js';
+import { getPagination, setPaginationHeaders } from '../utils/pagination.js';
 
 const router = Router();
 
@@ -22,23 +23,48 @@ router.post('/upload', verifyToken, uploadMarketplace.array('images', 3), async 
 // GET /api/marketplace - Get approved items (or all if admin)
 router.get('/', verifyToken, async (req, res) => {
     try {
-        let items;
+        const { status, search = '' } = req.query;
+        const { page, limit, offset } = getPagination(req.query, { defaultLimit: 24, maxLimit: 100 });
+        const filters = [];
+        const params = [];
+
         if (req.user.role === 'admin') {
-            items = await db.prepare(`
-                SELECT m.*, u.display_name, u.matric_no
-                FROM marketplace_items m
-                JOIN users u ON m.user_id = u.id
-                ORDER BY m.created_at DESC
-            `).all();
+            if (status) {
+                filters.push('m.status = ?');
+                params.push(status);
+            }
         } else {
-            items = await db.prepare(`
-                SELECT m.*, u.display_name, u.matric_no
-                FROM marketplace_items m
-                JOIN users u ON m.user_id = u.id
-                WHERE m.status = 'approved' OR m.user_id = ?
-                ORDER BY m.created_at DESC
-            `).all(req.user.id);
+            filters.push("(m.status = 'approved' OR m.user_id = ?)");
+            params.push(req.user.id);
         }
+
+        if (search.trim()) {
+            filters.push('(m.title ILIKE ? OR m.description ILIKE ?)');
+            params.push(`%${search.trim()}%`, `%${search.trim()}%`);
+        }
+
+        const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+        const countRow = await db.prepare(`
+            SELECT COUNT(*) as count
+            FROM marketplace_items m
+            ${whereClause}
+        `).get(...params);
+
+        const items = await db.prepare(`
+            SELECT m.*, u.display_name, u.matric_no
+            FROM marketplace_items m
+            JOIN users u ON m.user_id = u.id
+            ${whereClause}
+            ORDER BY m.created_at DESC
+            LIMIT ? OFFSET ?
+        `).all(...params, limit, offset);
+
+        setPaginationHeaders(res, {
+            page,
+            limit,
+            total: countRow ? Number(countRow.count) : 0,
+        });
+
         res.json(items);
     } catch (err) {
         console.error('Get marketplace error:', err);
