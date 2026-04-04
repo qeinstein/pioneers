@@ -24,7 +24,7 @@ export default function ManageBirthdays() {
     }, []);
 
     async function fetchBirthdays() {
-        const res = await fetch('/api/admin/birthdays', { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch('/api/admin/birthdays?limit=100', { headers: { Authorization: `Bearer ${token}` } });
         const data = await res.json();
         if (Array.isArray(data)) setBirthdays(data);
         setLoading(false);

@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export default function Notifications() {
-    const { token, unreadCount, markAllRead, updateToken } = useAuth();
+    const { token, unreadCount, markAllRead, refreshNotifications, updateToken } = useAuth();
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        fetch('/api/notifications', { headers: { Authorization: `Bearer ${token}` } })
+        fetch('/api/notifications?limit=50', { headers: { Authorization: `Bearer ${token}` } })
             .then(res => res.json())
             .then(data => setNotifications(data.notifications || []))
             .finally(() => setLoading(false));
@@ -15,12 +15,13 @@ export default function Notifications() {
 
     async function handleMarkRead(id) {
         if (id === 'all') {
-            await fetch('/api/notifications/read-all', { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
+            await markAllRead?.();
             setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
-            if (markAllRead) markAllRead();
+            refreshNotifications?.();
         } else {
             await fetch(`/api/notifications/${id}/read`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: 1 } : n));
+            refreshNotifications?.();
         }
     }
 
@@ -35,7 +36,7 @@ export default function Notifications() {
             if (res.ok) {
                 const data = await res.json();
                 // Mark the notification as read so the buttons disappear
-                handleMarkRead(notif.id);
+                await handleMarkRead(notif.id);
                 // The new token is handled by RoleActionChecker usually, but here they can just refresh to see admin features
                 if (action === 'accept') {
                     if (data.token) updateToken(data.token);

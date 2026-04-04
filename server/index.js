@@ -30,6 +30,7 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: { origin: '*', methods: ['GET', 'POST'] },
+    maxHttpBufferSize: 1e6,
 });
 
 const PORT = process.env.PORT || 3001;
@@ -52,9 +53,19 @@ app.set('trust proxy', 1);
 // Logging
 app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
 
-app.use(compression());
+app.use(compression({
+    filter: (req, res) => {
+        if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+            return false;
+        }
+        return compression.filter(req, res);
+    },
+}));
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+
+const defaultJsonParser = express.json({ limit: '256kb' });
+const moderateJsonParser = express.json({ limit: '1mb' });
+const quizJsonParser = express.json({ limit: '2mb' });
 
 // Serve frontend build in production
 const distPath = join(__dirname, '..', 'dist');
@@ -65,31 +76,30 @@ app.use('/uploads', express.static(join(__dirname, 'uploads'), {
 }));
 
 // Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/courses', courseRoutes);
-app.use('/api/quizzes', quizRoutes);
-app.use('/api/leaderboard', leaderboardRoutes);
-app.use('/api/comments', commentRoutes);
-app.use('/api/suggestions', suggestionRoutes);
-app.use('/api/bookmarks', bookmarkRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/live', liveRoutes);
-app.use('/api/marketplace', marketplaceRoutes);
-app.use('/api/flashcards', flashcardRoutes);
-app.use('/api/polls', pollRoutes);
+app.use('/api/auth', defaultJsonParser, authRoutes);
+app.use('/api/courses', defaultJsonParser, courseRoutes);
+app.use('/api/quizzes', quizJsonParser, quizRoutes);
+app.use('/api/leaderboard', defaultJsonParser, leaderboardRoutes);
+app.use('/api/comments', defaultJsonParser, commentRoutes);
+app.use('/api/suggestions', defaultJsonParser, suggestionRoutes);
+app.use('/api/bookmarks', defaultJsonParser, bookmarkRoutes);
+app.use('/api/notifications', defaultJsonParser, notificationRoutes);
+app.use('/api/admin', moderateJsonParser, adminRoutes);
+app.use('/api/live', defaultJsonParser, liveRoutes);
+app.use('/api/marketplace', moderateJsonParser, marketplaceRoutes);
+app.use('/api/flashcards', moderateJsonParser, flashcardRoutes);
+app.use('/api/polls', defaultJsonParser, pollRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Internal pinging for uptime (prevents free Render app from sleeping)
-// Only run on Render (where PORT is set)
-if (process.env.RENDER) {
+// Internal pinging is disabled by default because it creates constant self-traffic.
+if (process.env.ENABLE_INTERNAL_PING === 'true') {
     import('https').then(https => {
         const PING_URL = `https://pioneers-cq56.onrender.com/api/health`;
-        const PING_INTERVAL = 20 * 1000; // 20 seconds
+        const PING_INTERVAL = 5 * 60 * 1000;
 
         setInterval(() => {
             https.get(PING_URL, (res) => {
@@ -99,7 +109,7 @@ if (process.env.RENDER) {
             });
         }, PING_INTERVAL);
 
-        console.log(`Internal uptime pinger started: pinging ${PING_URL} every 20 seconds`);
+        console.log(`Internal uptime pinger started: pinging ${PING_URL} every 5 minutes`);
     });
 }
 

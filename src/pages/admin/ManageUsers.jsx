@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmModal from '../../components/ConfirmModal';
+import { getTotalPages, parsePaginatedResponse } from '../../utils/pagination';
 
 export default function ManageUsers() {
     const { token } = useAuth();
@@ -16,13 +17,84 @@ export default function ManageUsers() {
     const [rangeEnd, setRangeEnd] = useState('');
     const [msg, setMsg] = useState('');
     const [confirmAction, setConfirmAction] = useState(null);
+    const [searchUsers, setSearchUsers] = useState('');
+    const [searchMatrics, setSearchMatrics] = useState('');
+    const [userPage, setUserPage] = useState(1);
+    const [matricPage, setMatricPage] = useState(1);
+    const [userTotal, setUserTotal] = useState(0);
+    const [matricTotal, setMatricTotal] = useState(0);
+    const [usersLoaded, setUsersLoaded] = useState(false);
+    const [matricsLoaded, setMatricsLoaded] = useState(false);
+    const userPageSize = 25;
+    const matricPageSize = 50;
 
     useEffect(() => {
-        Promise.all([
-            fetch('/api/admin/users', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-            fetch('/api/admin/allowed-matrics', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        ]).then(([u, m]) => { setUsers(u); setMatrics(m); }).finally(() => setLoading(false));
-    }, []);
+        const timer = setTimeout(() => {
+            fetchUsers();
+        }, 250);
+        return () => clearTimeout(timer);
+    }, [searchUsers, userPage, token]);
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            fetchMatrics();
+        }, 250);
+        return () => clearTimeout(timer);
+    }, [searchMatrics, matricPage, token]);
+
+    useEffect(() => {
+        setUserPage(1);
+    }, [searchUsers]);
+
+    useEffect(() => {
+        setMatricPage(1);
+    }, [searchMatrics]);
+
+    useEffect(() => {
+        setLoading(true);
+        setUsersLoaded(false);
+        setMatricsLoaded(false);
+    }, [token]);
+
+    useEffect(() => {
+        if (usersLoaded && matricsLoaded) {
+            setLoading(false);
+        }
+    }, [usersLoaded, matricsLoaded]);
+
+    async function fetchUsers() {
+        const params = new URLSearchParams({
+            page: String(userPage),
+            limit: String(userPageSize),
+        });
+        if (searchUsers.trim()) params.set('search', searchUsers.trim());
+
+        const response = await fetch(`/api/admin/users?${params}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const { items, total } = await parsePaginatedResponse(response);
+        setUsers(items);
+        setUserTotal(total);
+        setUsersLoaded(true);
+        return items;
+    }
+
+    async function fetchMatrics() {
+        const params = new URLSearchParams({
+            page: String(matricPage),
+            limit: String(matricPageSize),
+        });
+        if (searchMatrics.trim()) params.set('search', searchMatrics.trim());
+
+        const response = await fetch(`/api/admin/allowed-matrics?${params}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const { items, total } = await parsePaginatedResponse(response);
+        setMatrics(items);
+        setMatricTotal(total);
+        setMatricsLoaded(true);
+        return items;
+    }
 
     function changeRole(u, newRole) {
         setConfirmAction({
@@ -67,8 +139,7 @@ export default function ManageUsers() {
         const res = await fetch('/api/admin/allowed-matrics', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
         const data = await res.json();
         setMsg(data.message); setSingleMatric(''); setRangeStart(''); setRangeEnd('');
-        const m = await fetch('/api/admin/allowed-matrics', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json());
-        setMatrics(m);
+        await fetchMatrics();
     }
 
     function removeMatric(m) {
@@ -89,6 +160,9 @@ export default function ManageUsers() {
     }
 
     if (loading) return <div className="page-container"><div className="loading-spinner"><div className="spinner"></div></div></div>;
+
+    const userTotalPages = getTotalPages(userTotal, userPageSize);
+    const matricTotalPages = getTotalPages(matricTotal, matricPageSize);
 
     return (
         <>
@@ -114,36 +188,54 @@ export default function ManageUsers() {
                 {msg && <div style={{ padding: 'var(--space-3) var(--space-4)', background: 'var(--success-soft)', color: 'var(--success)', borderRadius: 'var(--radius-md)', fontSize: 'var(--font-sm)', marginBottom: 'var(--space-4)' }}>{msg}</div>}
 
                 {tab === 'users' ? (
-                    <div className="table-container animate-slide-up">
-                        <table className="table">
-                            <thead><tr><th>User</th><th>Role</th><th>Attempts</th><th>Joined</th><th>Actions</th></tr></thead>
-                            <tbody>
-                                {users.map(u => (
-                                    <tr key={u.id}>
-                                        <td>
-                                            <div style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{u.display_name || u.matric_no}</div>
-                                            <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>{u.matric_no}</div>
-                                        </td>
-                                        <td><span className={`badge ${u.role === 'admin' ? 'badge-warning' : 'badge-info'}`}>{u.role}</span></td>
-                                        <td style={{ fontSize: 'var(--font-sm)' }}>{u.quiz_attempts}</td>
-                                        <td style={{ fontSize: 'var(--font-xs)' }}>{new Date(u.created_at).toLocaleDateString()}</td>
-                                        <td>
-                                            <div className="flex gap-2">
-                                                {u.role === 'student' && !u.pending_admin ? (
-                                                    <button className="btn btn-ghost btn-sm" onClick={() => changeRole(u, 'admin')}>Promote</button>
-                                                ) : u.pending_admin ? (
-                                                    <span className="badge badge-warning">Pending Invite</span>
-                                                ) : u.matric_no !== '240805099' && (
-                                                    <button className="btn btn-danger btn-sm" onClick={() => changeRole(u, 'student')}>Demote</button>
-                                                )}
-                                                <button className="btn btn-ghost btn-sm" onClick={() => resetPassword(u)}>Reset Pass</button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                    <>
+                        <div className="filter-bar mb-4">
+                            <input className="form-input" value={searchUsers} onChange={e => setSearchUsers(e.target.value)} placeholder="Search by name or matric number" />
+                        </div>
+                        <div className="table-container animate-slide-up">
+                            <table className="table">
+                                <thead><tr><th>User</th><th>Role</th><th>Attempts</th><th>Joined</th><th>Actions</th></tr></thead>
+                                <tbody>
+                                    {users.map(u => (
+                                        <tr key={u.id}>
+                                            <td>
+                                                <div style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{u.display_name || u.matric_no}</div>
+                                                <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)' }}>{u.matric_no}</div>
+                                            </td>
+                                            <td><span className={`badge ${u.role === 'admin' ? 'badge-warning' : 'badge-info'}`}>{u.role}</span></td>
+                                            <td style={{ fontSize: 'var(--font-sm)' }}>{u.quiz_attempts}</td>
+                                            <td style={{ fontSize: 'var(--font-xs)' }}>{new Date(u.created_at).toLocaleDateString()}</td>
+                                            <td>
+                                                <div className="flex gap-2">
+                                                    {u.role === 'student' && !u.pending_admin ? (
+                                                        <button className="btn btn-ghost btn-sm" onClick={() => changeRole(u, 'admin')}>Promote</button>
+                                                    ) : u.pending_admin ? (
+                                                        <span className="badge badge-warning">Pending Invite</span>
+                                                    ) : u.matric_no !== '240805099' && (
+                                                        <button className="btn btn-danger btn-sm" onClick={() => changeRole(u, 'student')}>Demote</button>
+                                                    )}
+                                                    <button className="btn btn-ghost btn-sm" onClick={() => resetPassword(u)}>Reset Pass</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        {userTotalPages > 1 && (
+                            <div className="flex items-center justify-between mt-4">
+                                <button className="btn btn-ghost btn-sm" onClick={() => setUserPage(p => Math.max(1, p - 1))} disabled={userPage === 1}>
+                                    Previous
+                                </button>
+                                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+                                    Page {userPage} of {userTotalPages}
+                                </span>
+                                <button className="btn btn-ghost btn-sm" onClick={() => setUserPage(p => Math.min(userTotalPages, p + 1))} disabled={userPage === userTotalPages}>
+                                    Next
+                                </button>
+                            </div>
+                        )}
+                    </>
                 ) : (
                     <div className="animate-slide-up">
                         <div className="card-static mb-6" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)' }}>
@@ -170,10 +262,13 @@ export default function ManageUsers() {
                         </div>
 
                         <div className="table-container">
+                            <div className="filter-bar mb-4">
+                                <input className="form-input" value={searchMatrics} onChange={e => setSearchMatrics(e.target.value)} placeholder="Search whitelist entries" />
+                            </div>
                             <table className="table">
                                 <thead><tr><th>Matric Number</th><th>Added By</th><th>Date</th><th></th></tr></thead>
                                 <tbody>
-                                    {matrics.slice(0, 50).map(m => (
+                                    {matrics.map(m => (
                                         <tr key={m.id}>
                                             <td style={{ fontWeight: 600, fontSize: 'var(--font-sm)' }}>{m.matric_no}</td>
                                             <td style={{ fontSize: 'var(--font-sm)' }}>{m.added_by_name || '—'}</td>
@@ -183,7 +278,19 @@ export default function ManageUsers() {
                                     ))}
                                 </tbody>
                             </table>
-                            {matrics.length > 50 && <div style={{ padding: 'var(--space-3)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>Showing 50 of {matrics.length}</div>}
+                            {matricTotalPages > 1 && (
+                                <div className="flex items-center justify-between mt-4">
+                                    <button className="btn btn-ghost btn-sm" onClick={() => setMatricPage(p => Math.max(1, p - 1))} disabled={matricPage === 1}>
+                                        Previous
+                                    </button>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+                                        Page {matricPage} of {matricTotalPages}
+                                    </span>
+                                    <button className="btn btn-ghost btn-sm" onClick={() => setMatricPage(p => Math.min(matricTotalPages, p + 1))} disabled={matricPage === matricTotalPages}>
+                                        Next
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

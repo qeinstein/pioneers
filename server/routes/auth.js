@@ -5,6 +5,7 @@ import db from '../db.js';
 import { verifyToken, JWT_SECRET } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/rateLimit.js';
 import { uploadAvatar, uploadBirthdayPic } from '../cloudinary.js';
+import { getPagination, setPaginationHeaders } from '../utils/pagination.js';
 
 const upload = uploadAvatar;
 
@@ -157,9 +158,37 @@ router.get('/profile', verifyToken, async (req, res) => {
 // GET /api/auth/users (public directory)
 router.get('/users', verifyToken, async (req, res) => {
     try {
-        const users = await db.prepare(
-            'SELECT id, matric_no, display_name, bio, profile_pic_url, role, created_at FROM users ORDER BY display_name ASC, matric_no ASC'
-        ).all();
+        const { search = '' } = req.query;
+        const { page, limit, offset } = getPagination(req.query, { defaultLimit: 24, maxLimit: 100 });
+        const filters = [];
+        const params = [];
+
+        if (search.trim()) {
+            filters.push('(display_name ILIKE ? OR matric_no ILIKE ? OR bio ILIKE ?)');
+            params.push(`%${search.trim()}%`, `%${search.trim()}%`, `%${search.trim()}%`);
+        }
+
+        const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+        const countRow = await db.prepare(`
+            SELECT COUNT(*) as count
+            FROM users
+            ${whereClause}
+        `).get(...params);
+
+        const users = await db.prepare(`
+            SELECT id, matric_no, display_name, bio, profile_pic_url, role, created_at
+            FROM users
+            ${whereClause}
+            ORDER BY display_name ASC, matric_no ASC
+            LIMIT ? OFFSET ?
+        `).all(...params, limit, offset);
+
+        setPaginationHeaders(res, {
+            page,
+            limit,
+            total: countRow ? Number(countRow.count) : 0,
+        });
         res.json(users);
     } catch (err) {
         console.error('Get all users error:', err);

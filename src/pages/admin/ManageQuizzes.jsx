@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import ConfirmModal from '../../components/ConfirmModal';
+import { getTotalPages, parsePaginatedResponse } from '../../utils/pagination';
 
 export default function ManageQuizzes() {
     const { token } = useAuth();
@@ -11,25 +12,48 @@ export default function ManageQuizzes() {
     const [tab, setTab] = useState('pending');
     const [msg, setMsg] = useState('');
     const [confirmAction, setConfirmAction] = useState(null);
+    const [pendingPage, setPendingPage] = useState(1);
+    const [publishedPage, setPublishedPage] = useState(1);
+    const [pendingTotal, setPendingTotal] = useState(0);
+    const [publishedTotal, setPublishedTotal] = useState(0);
+    const pendingPageSize = 10;
+    const publishedPageSize = 20;
 
     useEffect(() => {
-        Promise.all([
-            fetch('/api/admin/pending-quizzes', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-            fetch('/api/quizzes?status=approved', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        ]).then(([p, a]) => { setPending(p); setQuizzes(a); }).finally(() => setLoading(false));
-    }, []);
+        setLoading(true);
+        Promise.all([fetchPending(), fetchPublished()]).finally(() => setLoading(false));
+    }, [token, pendingPage, publishedPage]);
+
+    async function fetchPending() {
+        const response = await fetch(`/api/admin/pending-quizzes?page=${pendingPage}&limit=${pendingPageSize}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const { items, total } = await parsePaginatedResponse(response);
+        setPending(items);
+        setPendingTotal(total);
+        return items;
+    }
+
+    async function fetchPublished() {
+        const response = await fetch(`/api/quizzes?status=approved&page=${publishedPage}&limit=${publishedPageSize}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        const { items, total } = await parsePaginatedResponse(response);
+        setQuizzes(items);
+        setPublishedTotal(total);
+        return items;
+    }
 
     async function approve(id) {
         await fetch(`/api/admin/quizzes/${id}/approve`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
-        const quiz = pending.find(q => q.id === id);
-        setPending(prev => prev.filter(q => q.id !== id));
-        if (quiz) setQuizzes(prev => [{ ...quiz, status: 'approved' }, ...prev]);
+        await fetchPending();
+        await fetchPublished();
         setMsg('Quiz approved');
     }
 
     async function reject(id) {
         await fetch(`/api/admin/quizzes/${id}/reject`, { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
-        setPending(prev => prev.filter(q => q.id !== id));
+        await fetchPending();
         setMsg('Quiz rejected');
     }
 
@@ -53,6 +77,9 @@ export default function ManageQuizzes() {
     }
 
     if (loading) return <div className="page-container"><div className="loading-spinner"><div className="spinner"></div></div></div>;
+
+    const pendingTotalPages = getTotalPages(pendingTotal, pendingPageSize);
+    const publishedTotalPages = getTotalPages(publishedTotal, publishedPageSize);
 
     return (
         <>
@@ -81,53 +108,83 @@ export default function ManageQuizzes() {
                     pending.length === 0 ? (
                         <div className="empty-state"><div className="empty-state-title">No pending quizzes</div><div className="empty-state-text">All quizzes have been reviewed</div></div>
                     ) : (
-                        <div className="flex flex-col gap-4 stagger-children">
-                            {pending.map(q => (
-                                <div key={q.id} className="card-static" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)' }}>
-                                    <div className="flex items-center justify-between flex-wrap gap-3">
-                                        <div style={{ flex: 1 }}>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="badge badge-primary">{q.course_code}</span>
-                                                <span className="badge badge-warning">Pending</span>
+                        <>
+                            <div className="flex flex-col gap-4 stagger-children">
+                                {pending.map(q => (
+                                    <div key={q.id} className="card-static" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)' }}>
+                                        <div className="flex items-center justify-between flex-wrap gap-3">
+                                            <div style={{ flex: 1 }}>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="badge badge-primary">{q.course_code}</span>
+                                                    <span className="badge badge-warning">Pending</span>
+                                                </div>
+                                                <h3 style={{ fontWeight: 700, fontSize: 'var(--font-sm)' }}>{q.title}</h3>
+                                                <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
+                                                    By {q.creator_name || q.creator_matric} &middot; {q.question_count} questions
+                                                </p>
                                             </div>
-                                            <h3 style={{ fontWeight: 700, fontSize: 'var(--font-sm)' }}>{q.title}</h3>
-                                            <p style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>
-                                                By {q.creator_name || q.creator_matric} &middot; {q.question_count} questions
-                                            </p>
-                                        </div>
-                                        <div className="flex flex-col gap-2">
-                                            <button className="btn btn-success btn-sm" onClick={() => approve(q.id)}>Approve</button>
-                                            <button className="btn btn-danger btn-sm" onClick={() => reject(q.id)}>Reject</button>
-                                            <Link to={`/quiz/${q.id}`} className="btn btn-ghost btn-sm">Preview</Link>
+                                            <div className="flex flex-col gap-2">
+                                                <button className="btn btn-success btn-sm" onClick={() => approve(q.id)}>Approve</button>
+                                                <button className="btn btn-danger btn-sm" onClick={() => reject(q.id)}>Reject</button>
+                                                <Link to={`/quiz/${q.id}`} className="btn btn-ghost btn-sm">Preview</Link>
+                                            </div>
                                         </div>
                                     </div>
+                                ))}
+                            </div>
+                            {pendingTotalPages > 1 && (
+                                <div className="flex items-center justify-between mt-4">
+                                    <button className="btn btn-ghost btn-sm" onClick={() => setPendingPage(p => Math.max(1, p - 1))} disabled={pendingPage === 1}>
+                                        Previous
+                                    </button>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+                                        Page {pendingPage} of {pendingTotalPages}
+                                    </span>
+                                    <button className="btn btn-ghost btn-sm" onClick={() => setPendingPage(p => Math.min(pendingTotalPages, p + 1))} disabled={pendingPage === pendingTotalPages}>
+                                        Next
+                                    </button>
                                 </div>
-                            ))}
-                        </div>
+                            )}
+                        </>
                     )
                 ) : (
                     quizzes.length === 0 ? (
                         <div className="empty-state"><div className="empty-state-title">No published quizzes</div></div>
                     ) : (
-                        <div className="flex flex-col gap-4 stagger-children">
-                            {quizzes.map(q => (
-                                <div key={q.id} className="card-static" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)' }}>
-                                    <div className="flex items-center justify-between flex-wrap gap-3">
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="badge badge-primary">{q.course_code}</span>
-                                                <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>{q.times_taken} taken &middot; {q.question_count} questions</span>
+                        <>
+                            <div className="flex flex-col gap-4 stagger-children">
+                                {quizzes.map(q => (
+                                    <div key={q.id} className="card-static" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-5)' }}>
+                                        <div className="flex items-center justify-between flex-wrap gap-3">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <span className="badge badge-primary">{q.course_code}</span>
+                                                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-xs)' }}>{q.times_taken} taken &middot; {q.question_count} questions</span>
+                                                </div>
+                                                <h3 style={{ fontWeight: 700, fontSize: 'var(--font-sm)' }}>{q.title}</h3>
                                             </div>
-                                            <h3 style={{ fontWeight: 700, fontSize: 'var(--font-sm)' }}>{q.title}</h3>
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <Link to={`/quiz/${q.id}`} className="btn btn-ghost btn-sm">View</Link>
-                                            <button className="btn btn-danger btn-sm" onClick={() => deleteQuiz(q)}>Delete</button>
+                                            <div className="flex gap-2">
+                                                <Link to={`/quiz/${q.id}`} className="btn btn-ghost btn-sm">View</Link>
+                                                <button className="btn btn-danger btn-sm" onClick={() => deleteQuiz(q)}>Delete</button>
+                                            </div>
                                         </div>
                                     </div>
+                                ))}
+                            </div>
+                            {publishedTotalPages > 1 && (
+                                <div className="flex items-center justify-between mt-4">
+                                    <button className="btn btn-ghost btn-sm" onClick={() => setPublishedPage(p => Math.max(1, p - 1))} disabled={publishedPage === 1}>
+                                        Previous
+                                    </button>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+                                        Page {publishedPage} of {publishedTotalPages}
+                                    </span>
+                                    <button className="btn btn-ghost btn-sm" onClick={() => setPublishedPage(p => Math.min(publishedTotalPages, p + 1))} disabled={publishedPage === publishedTotalPages}>
+                                        Next
+                                    </button>
                                 </div>
-                            ))}
-                        </div>
+                            )}
+                        </>
                     )
                 )}
             </div>

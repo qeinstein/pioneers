@@ -10,6 +10,9 @@ const needsSsl = process.env.NODE_ENV === 'production' || (dbUrl && dbUrl.includ
 const pool = new Pool({
   connectionString: dbUrl,
   ssl: needsSsl ? { rejectUnauthorized: false } : false,
+  max: Number.parseInt(process.env.PG_POOL_MAX || '5', 10),
+  idleTimeoutMillis: Number.parseInt(process.env.PG_IDLE_TIMEOUT_MS || '10000', 10),
+  connectionTimeoutMillis: Number.parseInt(process.env.PG_CONNECT_TIMEOUT_MS || '5000', 10),
 });
 
 // Test connection on startup
@@ -302,6 +305,29 @@ const createTables = async () => {
       );
     `);
 
+    // Create system notifications table to avoid fan-out inserts for broadcast messages
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_notifications (
+        id SERIAL PRIMARY KEY,
+        type TEXT NOT NULL,
+        message TEXT NOT NULL,
+        reference_id INTEGER DEFAULT NULL,
+        exclude_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        expires_at TIMESTAMP DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS system_notification_reads (
+        id SERIAL PRIMARY KEY,
+        notification_id INTEGER NOT NULL REFERENCES system_notifications(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(notification_id, user_id)
+      );
+    `);
+
     // Create pending_role_changes table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS pending_role_changes (
@@ -440,6 +466,9 @@ const createTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_attempts_quiz ON attempts(quiz_id);
       CREATE INDEX IF NOT EXISTS idx_questions_quiz ON questions(quiz_id);
       CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read);
+      CREATE INDEX IF NOT EXISTS idx_system_notifications_created ON system_notifications(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_system_notifications_expiry ON system_notifications(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_system_notification_reads_user ON system_notification_reads(user_id, notification_id);
       CREATE INDEX IF NOT EXISTS idx_bookmarks_user ON bookmarks(user_id);
       CREATE INDEX IF NOT EXISTS idx_comments_quiz ON comments(quiz_id);
       CREATE INDEX IF NOT EXISTS idx_live_participants_session ON live_participants(session_id);
