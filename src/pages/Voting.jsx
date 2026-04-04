@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { getTotalPages, parsePaginatedResponse } from '../utils/pagination';
 
 const POLL_COLORS = [
     { gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', bar: '#667eea' },
@@ -29,17 +30,25 @@ export default function Voting() {
     const [submitting, setSubmitting] = useState(false);
     const [msg, setMsg] = useState('');
     const [votingId, setVotingId] = useState(null);
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+    const pageSize = 20;
 
     useEffect(() => {
+        setLoading(true);
         fetchPolls();
-    }, []);
+    }, [token, page]);
 
     async function fetchPolls() {
         try {
-            const res = await fetch('/api/polls', {
+            const res = await fetch(`/api/polls?page=${page}&limit=${pageSize}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            if (res.ok) setPolls(await res.json());
+            if (res.ok) {
+                const { items, total: totalItems } = await parsePaginatedResponse(res);
+                setPolls(items);
+                setTotal(totalItems);
+            }
         } finally {
             setLoading(false);
         }
@@ -89,6 +98,8 @@ export default function Voting() {
             setVotingId(null);
         }
     }
+
+    const totalPages = getTotalPages(total, pageSize);
 
     async function togglePublic(pollId, currentPublic) {
         await fetch(`/api/polls/${pollId}`, {
@@ -402,6 +413,20 @@ export default function Voting() {
                             </div>
                         );
                     })}
+                </div>
+            )}
+
+            {!loading && totalPages > 1 && (
+                <div className="flex items-center justify-between">
+                    <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                        Previous
+                    </button>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+                        Page {page} of {totalPages}
+                    </span>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                        Next
+                    </button>
                 </div>
             )}
         </div>

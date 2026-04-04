@@ -13,19 +13,16 @@ export default function ManageApprovals() {
 
     async function fetchItems() {
         try {
-            // Admins get all items, so we'll filter on the frontend for pending
             const [mRes, fRes] = await Promise.all([
-                fetch('/api/marketplace', { headers: { Authorization: `Bearer ${token}` } }),
-                fetch('/api/flashcards', { headers: { Authorization: `Bearer ${token}` } })
+                fetch('/api/marketplace?status=pending&limit=50', { headers: { Authorization: `Bearer ${token}` } }),
+                fetch('/api/flashcards?status=pending&limit=50', { headers: { Authorization: `Bearer ${token}` } })
             ]);
 
             if (mRes.ok) {
-                const data = await mRes.json();
-                setItems(data.filter(i => i.status === 'pending'));
+                setItems(await mRes.json());
             }
             if (fRes.ok) {
-                const data = await fRes.json();
-                setFlashcards(data.filter(i => i.status === 'pending'));
+                setFlashcards(await fRes.json());
             }
         } finally {
             setLoading(false);
@@ -121,7 +118,7 @@ export default function ManageApprovals() {
                                             <div>
                                                 <h3 style={{ fontSize: 'var(--font-lg)', fontWeight: 600 }}>{deck.title}</h3>
                                                 <div style={{ fontSize: 'var(--font-sm)', color: 'var(--text-muted)', marginTop: 'var(--space-1)' }}>
-                                                    By {deck.display_name} • {deck.cards?.length || 0} cards
+                                                    By {deck.display_name} • {deck.card_count || 0} cards
                                                 </div>
                                                 {deck.course_code && (
                                                     <div className="badge badge-primary badge-sm mt-2">{deck.course_code}</div>

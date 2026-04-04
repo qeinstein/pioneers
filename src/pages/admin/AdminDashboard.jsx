@@ -12,7 +12,7 @@ export default function AdminDashboard() {
         Promise.all([
             fetch('/api/admin/stats', { headers: { Authorization: `Bearer ${token}` } })
                 .then(r => r.ok ? r.json() : {}).catch(() => ({})),
-            fetch('/api/admin/pending-quizzes', { headers: { Authorization: `Bearer ${token}` } })
+            fetch('/api/admin/pending-quizzes?limit=5', { headers: { Authorization: `Bearer ${token}` } })
                 .then(r => r.ok ? r.json() : []).catch(() => ([])),
         ]).then(([s, p]) => { setStats(s); setPendingQuizzes(Array.isArray(p) ? p : []); }).finally(() => setLoading(false));
     }, []);

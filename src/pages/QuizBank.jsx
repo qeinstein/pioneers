@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import QuizCard from '../components/QuizCard';
+import { getTotalPages, parsePaginatedResponse } from '../utils/pagination';
 
 export default function QuizBank() {
     const { token } = useAuth();
@@ -14,19 +15,21 @@ export default function QuizBank() {
     const [loading, setLoading] = useState(true);
     const [allTags, setAllTags] = useState([]);
     const [liveMode, setLiveMode] = useState(false); // New state for live quiz filtering
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+    const pageSize = 24;
 
     useEffect(() => {
         Promise.all([
             fetch('/api/courses', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-            fetchQuizzes(),
             fetch('/api/bookmarks', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
             fetch('/api/quizzes/tags/recent', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-        ]).then(([c, , b, t]) => {
+        ]).then(([c, b, t]) => {
             setCourses(c);
             setBookmarks(b);
             if (Array.isArray(t)) setAllTags(t);
         });
-    }, []);
+    }, [token]);
 
     async function fetchQuizzes() {
         setLoading(true);
@@ -36,20 +39,28 @@ export default function QuizBank() {
         if (tagFilter) params.set('tag', tagFilter);
         // If in live mode, only fetch approved quizzes
         if (liveMode) params.set('status', 'approved');
+        params.set('page', String(page));
+        params.set('limit', String(pageSize));
 
         const res = await fetch(`/api/quizzes?${params}`, { headers: { Authorization: `Bearer ${token}` } });
-        const data = await res.json();
-        setQuizzes(data);
+        const { items, total: totalItems } = await parsePaginatedResponse(res);
+        setQuizzes(items);
+        setTotal(totalItems);
         setLoading(false);
-        return data;
+        return items;
     }
 
     useEffect(() => {
         const timer = setTimeout(fetchQuizzes, 300);
         return () => clearTimeout(timer);
+    }, [search, courseFilter, tagFilter, liveMode, page, token]);
+
+    useEffect(() => {
+        setPage(1);
     }, [search, courseFilter, tagFilter, liveMode]);
 
     const displayQuizzes = showBookmarks ? bookmarks : quizzes;
+    const totalPages = getTotalPages(total, pageSize);
 
     return (
         <div className="page-container">
@@ -103,9 +114,24 @@ export default function QuizBank() {
                     <div className="empty-state-text">{showBookmarks ? 'Bookmark quizzes to find them here' : 'Try adjusting your search or filters'}</div>
                 </div>
             ) : (
-                <div className="grid-2 stagger-children">
-                    {displayQuizzes.map(q => <QuizCard key={q.id} quiz={q} />)}
-                </div>
+                <>
+                    <div className="grid-2 stagger-children">
+                        {displayQuizzes.map(q => <QuizCard key={q.id} quiz={q} />)}
+                    </div>
+                    {!showBookmarks && totalPages > 1 && (
+                        <div className="flex items-center justify-between mt-6">
+                            <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                                Previous
+                            </button>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+                                Page {page} of {totalPages}
+                            </span>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>
+                                Next
+                            </button>
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

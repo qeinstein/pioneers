@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { getTotalPages, parsePaginatedResponse } from '../utils/pagination';
 
 export default function Marketplace() {
     const { token, user } = useAuth();
@@ -17,17 +18,25 @@ export default function Marketplace() {
     const [submitting, setSubmitting] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [msg, setMsg] = useState('');
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+    const pageSize = 24;
 
     useEffect(() => {
+        setLoading(true);
         fetchItems();
-    }, []);
+    }, [token, page]);
 
     async function fetchItems() {
         try {
-            const res = await fetch('/api/marketplace', {
+            const res = await fetch(`/api/marketplace?page=${page}&limit=${pageSize}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-            if (res.ok) setItems(await res.json());
+            if (res.ok) {
+                const { items: nextItems, total: totalItems } = await parsePaginatedResponse(res);
+                setItems(nextItems);
+                setTotal(totalItems);
+            }
         } finally {
             setLoading(false);
         }
@@ -291,6 +300,20 @@ export default function Marketplace() {
                             )}
                         </div>
                     ))}
+                </div>
+            )}
+
+            {!loading && getTotalPages(total, pageSize) > 1 && (
+                <div className="flex items-center justify-between">
+                    <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+                        Previous
+                    </button>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
+                        Page {page} of {getTotalPages(total, pageSize)}
+                    </span>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setPage(p => Math.min(getTotalPages(total, pageSize), p + 1))} disabled={page === getTotalPages(total, pageSize)}>
+                        Next
+                    </button>
                 </div>
             )}
         </div>

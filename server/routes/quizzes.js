@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import db from '../db.js';
 import { verifyToken, requireAdmin } from '../middleware/auth.js';
+import { getPagination, setPaginationHeaders } from '../utils/pagination.js';
 
 const router = Router();
 
@@ -72,7 +73,30 @@ async function checkAchievements(userId) {
 // GET /api/quizzes — quiz bank
 router.get('/', verifyToken, async (req, res) => {
     try {
-        const { search, course_id, tag, status } = req.query;
+        const { search, course_id, tag } = req.query;
+        const { page, limit, offset } = getPagination(req.query, { defaultLimit: 20, maxLimit: 100 });
+        const status = req.user.role === 'admin'
+            ? (req.query.status || 'approved')
+            : 'approved';
+        const filters = ['q.status = ?'];
+        const params = [];
+
+        params.push(status);
+
+        if (search) {
+            filters.push('(q.title ILIKE ? OR q.description ILIKE ? OR c.course_code ILIKE ?)');
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+        }
+        if (course_id) {
+            filters.push('q.course_id = ?');
+            params.push(course_id);
+        }
+        if (tag) {
+            filters.push('q.tags ILIKE ?');
+            params.push(`%${tag}%`);
+        }
+
+        const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
         let query = `
       SELECT q.*, c.course_code, c.course_name, u.display_name as creator_name,
         (SELECT COUNT(*) FROM questions WHERE quiz_id = q.id) as question_count,
@@ -80,34 +104,20 @@ router.get('/', verifyToken, async (req, res) => {
       FROM quizzes q
       JOIN courses c ON q.course_id = c.id
       LEFT JOIN users u ON q.created_by = u.id
-      WHERE 1=1
+      ${whereClause}
     `;
-        const params = [];
 
-        if (status) {
-            query += ' AND q.status = ?';
-            params.push(status);
-        } else {
-            query += ' AND q.status = ?';
-            params.push('approved');
-        }
+        const countQuery = `
+            SELECT COUNT(*) as count
+            FROM quizzes q
+            JOIN courses c ON q.course_id = c.id
+            ${whereClause}
+        `;
+        const countRow = await db.prepare(countQuery).get(...params);
 
-        if (search) {
-            query += ' AND (q.title ILIKE ? OR q.description ILIKE ? OR c.course_code ILIKE ?)';
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`);
-        }
-        if (course_id) {
-            query += ' AND q.course_id = ?';
-            params.push(course_id);
-        }
-        if (tag) {
-            query += ' AND q.tags ILIKE ?';
-            params.push(`%${tag}%`);
-        }
+        query += ' ORDER BY q.created_at DESC LIMIT ? OFFSET ?';
 
-        query += ' ORDER BY q.created_at DESC';
-
-        const quizzes = await db.prepare(query).all(...params);
+        const quizzes = await db.prepare(query).all(...params, limit, offset);
 
         // Calculate difficulty for each quiz
         const result = quizzes.map(q => {
@@ -117,6 +127,12 @@ router.get('/', verifyToken, async (req, res) => {
                 else if (q.avg_score < 50) difficulty = 'Hard';
             }
             return { ...q, difficulty, tags: JSON.parse(q.tags || '[]') };
+        });
+
+        setPaginationHeaders(res, {
+            page,
+            limit,
+            total: countRow ? Number(countRow.count) : 0,
         });
 
         res.json(result);
@@ -225,7 +241,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 
         // User's past attempts
         const attempts = await db.prepare(
-            'SELECT score, total_questions, time_spent, created_at FROM attempts WHERE user_id = ? AND quiz_id = ? ORDER BY created_at DESC'
+            'SELECT score, total_questions, time_spent, created_at FROM attempts WHERE user_id = ? AND quiz_id = ? ORDER BY created_at DESC LIMIT 20'
         ).all(req.user.id, quiz.id);
 
         res.json({

@@ -6,6 +6,8 @@ export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [token, setToken] = useState(localStorage.getItem('token'));
     const [loading, setLoading] = useState(true);
+    const [notificationsPreview, setNotificationsPreview] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
     const [darkMode, setDarkMode] = useState(() => {
         const saved = localStorage.getItem('darkMode');
         return saved !== null ? JSON.parse(saved) : true;
@@ -21,8 +23,18 @@ export function AuthProvider({ children }) {
             fetchProfile();
         } else {
             setLoading(false);
+            setNotificationsPreview([]);
+            setUnreadCount(0);
         }
-    }, []);
+    }, [token]);
+
+    useEffect(() => {
+        if (!token) return undefined;
+
+        refreshNotifications();
+        const interval = setInterval(refreshNotifications, 60000);
+        return () => clearInterval(interval);
+    }, [token]);
 
     async function fetchProfile() {
         try {
@@ -42,6 +54,35 @@ export function AuthProvider({ children }) {
         }
     }
 
+    async function refreshNotifications() {
+        if (!token) return;
+        try {
+            const res = await fetch('/api/notifications?limit=10', {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            setNotificationsPreview(data.notifications || []);
+            setUnreadCount(data.unread_count || 0);
+        } catch {
+            // Ignore polling failures.
+        }
+    }
+
+    async function markAllRead() {
+        if (!token) return;
+        try {
+            await fetch('/api/notifications/read-all', {
+                method: 'PUT',
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            setUnreadCount(0);
+            setNotificationsPreview(prev => prev.map(notification => ({ ...notification, is_read: 1 })));
+        } catch {
+            // Ignore read sync failures.
+        }
+    }
+
     async function login(matric_no, password) {
         const res = await fetch('/api/auth/login', {
             method: 'POST',
@@ -54,6 +95,7 @@ export function AuthProvider({ children }) {
         localStorage.setItem('token', data.token);
         setToken(data.token);
         setUser(data.user);
+        setLoading(false);
         return data.user;
     }
 
@@ -80,6 +122,8 @@ export function AuthProvider({ children }) {
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
+        setNotificationsPreview([]);
+        setUnreadCount(0);
     }
 
     async function updateProfile(updates) {
@@ -136,6 +180,10 @@ export function AuthProvider({ children }) {
         isAdmin: user?.role === 'admin',
         isFirstLogin: user?.is_first_login,
         refreshProfile: fetchProfile,
+        notificationsPreview,
+        unreadCount,
+        refreshNotifications,
+        markAllRead,
         updateToken,
     };
 

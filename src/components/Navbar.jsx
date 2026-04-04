@@ -3,23 +3,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
-    const { user, isAdmin, logout, darkMode, setDarkMode } = useAuth();
+    const { user, isAdmin, logout, darkMode, setDarkMode, notificationsPreview, unreadCount, markAllRead, refreshNotifications } = useAuth();
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [notifOpen, setNotifOpen] = useState(false);
-    const [notifications, setNotifications] = useState([]);
-    const [unreadCount, setUnreadCount] = useState(0);
     const [profileOpen, setProfileOpen] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
     const notifRef = useRef(null);
     const profileRef = useRef(null);
-    const token = localStorage.getItem('token');
-
-    useEffect(() => {
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(interval);
-    }, []);
 
     useEffect(() => {
         setMobileMenuOpen(false);
@@ -35,25 +26,6 @@ export default function Navbar() {
         document.addEventListener('mousedown', handleClick);
         return () => document.removeEventListener('mousedown', handleClick);
     }, []);
-
-    async function fetchNotifications() {
-        try {
-            const res = await fetch('/api/notifications', { headers: { Authorization: `Bearer ${token}` } });
-            if (res.ok) {
-                const data = await res.json();
-                setNotifications(data.notifications.slice(0, 10));
-                setUnreadCount(data.unread_count);
-            }
-        } catch { }
-    }
-
-    async function markAllRead() {
-        try {
-            await fetch('/api/notifications/read-all', { method: 'PUT', headers: { Authorization: `Bearer ${token}` } });
-            setUnreadCount(0);
-            setNotifications(prev => prev.map(n => ({ ...n, is_read: 1 })));
-        } catch { }
-    }
 
     const navLinks = [
         { to: '/', label: '🏠 Home' },
@@ -105,7 +77,13 @@ export default function Navbar() {
                 </button>
 
                 {/* Notifications */}
-                <div ref={notifRef} className="notif-bell" onClick={() => { setNotifOpen(!notifOpen); if (!notifOpen) markAllRead(); }}>
+                <div ref={notifRef} className="notif-bell" onClick={() => {
+                    setNotifOpen(!notifOpen);
+                    if (!notifOpen) {
+                        markAllRead();
+                        refreshNotifications?.();
+                    }
+                }}>
                     <span style={{ fontSize: '1.2rem' }}>🔔</span>
                     {unreadCount > 0 && <span className="notif-count">{unreadCount}</span>}
 
@@ -121,11 +99,11 @@ export default function Navbar() {
                                 Notifications
                             </div>
                             <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                                {notifications.length === 0 ? (
+                                {notificationsPreview.length === 0 ? (
                                     <div style={{ padding: 'var(--space-6)', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-sm)' }}>
                                         No notifications yet
                                     </div>
-                                ) : notifications.map(n => (
+                                ) : notificationsPreview.map(n => (
                                     <div key={n.id} style={{
                                         padding: 'var(--space-3) var(--space-4)', borderBottom: '1px solid var(--border-color)',
                                         fontSize: 'var(--font-sm)', opacity: n.is_read ? 0.6 : 1,

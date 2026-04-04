@@ -192,7 +192,7 @@ export default function LiveJoin() {
         setShowCreate(true);
         setLoadingQuizzes(true);
         try {
-            const res = await fetch('/api/quizzes?status=approved', { headers: { Authorization: `Bearer ${token}` } });
+            const res = await fetch('/api/quizzes?status=approved&limit=30', { headers: { Authorization: `Bearer ${token}` } });
             if (res.ok) setQuizzes(await res.json());
         } catch { setQuizzes([]); }
         setLoadingQuizzes(false);

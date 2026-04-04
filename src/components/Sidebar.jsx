@@ -28,24 +28,16 @@ const Icons = {
 };
 
 export default function Sidebar() {
-    const { user, isAdmin, logout, darkMode, setDarkMode } = useAuth();
+    const { user, isAdmin, logout, darkMode, setDarkMode, unreadCount } = useAuth();
     const [mobileOpen, setMobileOpen] = useState(false);
     const [collapsed, setCollapsed] = useState(() => {
         const saved = localStorage.getItem('sidebarCollapsed');
         return saved === 'true';
     });
-    const [unreadCount, setUnreadCount] = useState(0);
     const [profileOpen, setProfileOpen] = useState(false);
     const location = useLocation();
     const navigate = useNavigate();
     const profileRef = useRef(null);
-    const token = localStorage.getItem('token');
-
-    useEffect(() => {
-        fetchNotifications();
-        const interval = setInterval(fetchNotifications, 30000);
-        return () => clearInterval(interval);
-    }, []);
 
     useEffect(() => {
         setMobileOpen(false);
@@ -65,19 +57,6 @@ export default function Sidebar() {
         setCollapsed(next);
         localStorage.setItem('sidebarCollapsed', String(next));
     }
-
-    async function fetchNotifications() {
-        try {
-            const res = await fetch('/api/notifications', { headers: { Authorization: `Bearer ${token}` } });
-            if (res.ok) {
-                const data = await res.json();
-                setNotifications(data.notifications.slice(0, 10));
-                setUnreadCount(data.unread_count);
-            }
-        } catch { }
-    }
-
-
 
     const isActive = (path) => location.pathname === path;
 
