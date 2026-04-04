@@ -61,6 +61,7 @@ export default function LiveJoin() {
     const [startingCountdown, setStartingCountdown] = useState(null);
     const [error, setError] = useState('');
     const [totalScore, setTotalScore] = useState(0);
+    const [isReady, setIsReady] = useState(false);
     // Create flow
     const [showCreate, setShowCreate] = useState(false);
     const [quizzes, setQuizzes] = useState([]);
@@ -181,6 +182,16 @@ export default function LiveJoin() {
         connectSocket(joinCode.trim());
     }
 
+    function markReady() {
+        socketRef.current?.emit('player-ready');
+        setIsReady(true);
+    }
+
+    function markUnready() {
+        socketRef.current?.emit('player-unready');
+        setIsReady(false);
+    }
+
     function submitAnswer(opt) {
         if (selectedAnswer || !question) return;
         setSelectedAnswer(opt);
@@ -272,24 +283,79 @@ export default function LiveJoin() {
 
     // WAITING ROOM (student view)
     if (phase === 'waiting') {
+        const BUBBLE_COLORS = ['#7c3aed','#3b82f6','#22c55e','#eab308','#ef4444','#ec4899','#06b6d4','#f97316'];
         return (
             <div className="page-container" style={{ textAlign: 'center' }}>
-                <div className="card-static animate-scale-in" style={{ maxWidth: '500px', margin: '0 auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)' }}>
-                    <div className="spinner" style={{ margin: '0 auto var(--space-4)' }}></div>
-                    <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, marginBottom: 'var(--space-2)' }}>You're In!</h2>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)', marginBottom: 'var(--space-4)' }}>
+                <div className="card-static animate-scale-in" style={{ maxWidth: '580px', margin: '0 auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)' }}>
+                    <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>You're In!</h2>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: 'var(--font-sm)', marginBottom: 'var(--space-6)' }}>
                         {session?.quiz_title} — Waiting for the host to start...
                     </p>
-                    <div style={{ padding: 'var(--space-3)', background: 'var(--bg-input)', borderRadius: 'var(--radius-lg)' }}>
-                        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-2)' }}>
+
+                    <div style={{ padding: 'var(--space-6)', background: 'var(--bg-input)', borderRadius: 'var(--radius-lg)', marginBottom: 'var(--space-6)', minHeight: '100px' }}>
+                        <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             {participants.length} player{participants.length !== 1 ? 's' : ''} waiting
                         </div>
-                        <div className="flex flex-wrap gap-2 justify-center">
-                            {participants.map(p => (
-                                <span key={p.user_id} className="badge badge-info">{p.display_name || p.matric_no}</span>
-                            ))}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)', justifyContent: 'center' }}>
+                            {participants.map((p, idx) => {
+                                const color = BUBBLE_COLORS[p.user_id % BUBBLE_COLORS.length];
+                                const initial = (p.display_name || p.matric_no || '?')[0].toUpperCase();
+                                return (
+                                    <div key={p.user_id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', animation: `bubbleFloat ${2.4 + (idx % 4) * 0.4}s ease-in-out infinite`, animationDelay: `${(idx % 6) * 0.35}s` }}>
+                                        <div style={{ position: 'relative' }}>
+                                            <div style={{
+                                                width: '68px', height: '68px', borderRadius: '50%',
+                                                background: color,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                fontSize: '1.4rem', fontWeight: 700, color: 'white',
+                                                border: p.is_ready ? '2px solid var(--success)' : '2px solid rgba(255,255,255,0.1)',
+                                                boxShadow: p.is_ready ? '0 0 14px rgba(34,197,94,0.35)' : 'none',
+                                                transition: 'all 0.3s ease',
+                                                overflow: 'hidden',
+                                            }}>
+                                                {p.profile_pic_url
+                                                    ? <img src={p.profile_pic_url} alt={initial} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                    : initial}
+                                            </div>
+                                            {p.is_ready && (
+                                                <div style={{
+                                                    position: 'absolute', top: -2, right: -2,
+                                                    width: '22px', height: '22px', borderRadius: '50%',
+                                                    background: 'var(--success)',
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    border: '2px solid var(--bg-card)',
+                                                }}>
+                                                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+                                                        <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                                                    </svg>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <span style={{
+                                            fontSize: '0.7rem', fontWeight: 600,
+                                            color: p.is_ready ? 'var(--text-primary)' : 'var(--text-muted)',
+                                            maxWidth: '72px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                        }}>
+                                            {p.display_name || p.matric_no}
+                                        </span>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </div>
+
+                    {isReady ? (
+                        <button className="btn btn-ghost" onClick={markUnready} style={{ color: 'var(--success)', borderColor: 'var(--success)' }}>
+                            <svg width="13" height="13" viewBox="0 0 12 12" fill="none" style={{ marginRight: '6px' }}>
+                                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                            Ready (undo)
+                        </button>
+                    ) : (
+                        <button className="btn btn-primary btn-lg" onClick={markReady}>
+                            I'm Ready
+                        </button>
+                    )}
                 </div>
             </div>
         );
