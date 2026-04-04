@@ -11,6 +11,15 @@ const upload = uploadAvatar;
 
 const router = Router();
 
+function liveStreak(streak) {
+    if (!streak) return { current_streak: 0, longest_streak: 0 };
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const last = streak.last_activity_date;
+    const current = (last === today || last === yesterday) ? streak.current_streak : 0;
+    return { ...streak, current_streak: current };
+}
+
 // POST /api/auth/login
 router.post('/login', loginLimiter, async (req, res) => {
     try {
@@ -45,13 +54,30 @@ router.post('/login', loginLimiter, async (req, res) => {
             'INSERT INTO sessions (user_id, token_hash, device, ip_address) VALUES (?, ?, ?, ?)'
         ).run(user.id, tokenHash, device, ip);
 
+        // Update login streak
+        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        const streakRow = await db.prepare('SELECT * FROM streaks WHERE user_id = ?').get(user.id);
+        if (streakRow) {
+            const last = streakRow.last_activity_date;
+            if (last !== today) {
+                const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+                const newStreak = last === yesterday ? streakRow.current_streak + 1 : 1;
+                const newLongest = Math.max(newStreak, streakRow.longest_streak);
+                await db.prepare(
+                    'UPDATE streaks SET current_streak = ?, longest_streak = ?, last_activity_date = ? WHERE user_id = ?'
+                ).run(newStreak, newLongest, today, user.id);
+            }
+        }
+
         res.json({
             token,
             user: {
                 id: user.id,
                 matric_no: user.matric_no,
+                username: user.username || null,
                 display_name: user.display_name,
                 bio: user.bio,
+                dob: user.dob || null,
                 profile_pic_url: user.profile_pic_url,
                 role: user.role,
                 is_first_login: user.is_first_login === 1,
@@ -132,7 +158,19 @@ router.get('/profile', verifyToken, async (req, res) => {
 
         if (!user) return res.status(404).json({ error: 'User not found' });
 
-        const streak = await db.prepare('SELECT * FROM streaks WHERE user_id = ?').get(req.user.id);
+        let streak = await db.prepare('SELECT * FROM streaks WHERE user_id = ?').get(req.user.id);
+        if (streak) {
+            const today = new Date().toISOString().slice(0, 10);
+            if (streak.last_activity_date !== today) {
+                const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+                const newStreak = streak.last_activity_date === yesterday ? streak.current_streak + 1 : 1;
+                const newLongest = Math.max(newStreak, streak.longest_streak);
+                await db.prepare(
+                    'UPDATE streaks SET current_streak = ?, longest_streak = ?, last_activity_date = ? WHERE user_id = ?'
+                ).run(newStreak, newLongest, today, req.user.id);
+                streak = { ...streak, current_streak: newStreak, longest_streak: newLongest, last_activity_date: today };
+            }
+        }
         const achievements = await db.prepare('SELECT * FROM achievements WHERE user_id = ?').all(req.user.id);
         const quizCount = await db.prepare('SELECT COUNT(*) as count FROM attempts WHERE user_id = ?').get(req.user.id);
         const avgScore = await db.prepare(
@@ -142,7 +180,7 @@ router.get('/profile', verifyToken, async (req, res) => {
         res.json({
             ...user,
             is_first_login: user.is_first_login === 1,
-            streak: streak || { current_streak: 0, longest_streak: 0 },
+            streak: liveStreak(streak),
             achievements,
             stats: {
                 quizzes_taken: quizCount ? Number(quizCount.count) : 0,
@@ -225,7 +263,7 @@ router.get('/profile/:userId', verifyToken, async (req, res) => {
 
         res.json({
             ...user,
-            streak: streak || { current_streak: 0, longest_streak: 0 },
+            streak: liveStreak(streak),
             achievements,
             stats: {
                 quizzes_taken: quizCount ? Number(quizCount.count) : 0,
