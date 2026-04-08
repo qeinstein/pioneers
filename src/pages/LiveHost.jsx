@@ -29,6 +29,7 @@ export default function LiveHost() {
     const [copied, setCopied] = useState(false);
     const timerRef = useRef(null);
     const answerStartRef = useRef(null);
+    const copiedTimerRef = useRef(null);
 
     useEffect(() => {
         const socket = io('/', { auth: { token } });
@@ -92,7 +93,7 @@ export default function LiveHost() {
             clearInterval(timerRef.current);
         });
 
-        return () => { socket.disconnect(); clearInterval(timerRef.current); };
+        return () => { socket.disconnect(); clearInterval(timerRef.current); clearTimeout(copiedTimerRef.current); };
     }, [code, token]);
 
     function startQuiz() { socketRef.current?.emit('start-quiz'); }
@@ -130,7 +131,10 @@ export default function LiveHost() {
         function copyLink() {
             navigator.clipboard.writeText(joinLink).then(() => {
                 setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
+                clearTimeout(copiedTimerRef.current);
+                copiedTimerRef.current = setTimeout(() => setCopied(false), 2000);
+            }).catch(() => {
+                alert('Could not copy — please copy the link manually:\n' + joinLink);
             });
         }
 

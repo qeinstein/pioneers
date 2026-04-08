@@ -60,19 +60,26 @@ export default function QuizPage() {
 
     async function startLive() {
         const total = questions.length;
-        const count = liveQuestionCount === '' ? total : parseInt(liveQuestionCount);
-        const resolvedCount = Math.max(1, Math.min(count || total, total));
+        const parsed = parseInt(liveQuestionCount, 10);
+        const resolvedCount = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, total) : total;
         setLiveStarting(true);
         try {
             const res = await fetch('/api/live/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ quiz_id: parseInt(id), question_duration: 20, question_count: resolvedCount }),
+                body: JSON.stringify({ quiz_id: parseInt(id, 10), question_duration: 20, question_count: resolvedCount }),
             });
             const data = await res.json();
-            if (res.ok) navigate(`/live/host/${data.session_code}`);
-        } catch { }
-        finally { setLiveStarting(false); }
+            if (res.ok) {
+                navigate(`/live/host/${data.session_code}`);
+            } else {
+                alert(data.error || 'Failed to create live session. Please try again.');
+            }
+        } catch {
+            alert('Could not reach the server. Please check your connection.');
+        } finally {
+            setLiveStarting(false);
+        }
     }
 
     if (loading) return <div className="page-container"><div className="loading-spinner"><div className="spinner"></div></div></div>;

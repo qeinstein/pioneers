@@ -22,9 +22,10 @@ router.post('/create', verifyToken, async (req, res) => {
         const totalQuestions = Number(questions.c);
         if (totalQuestions === 0) return res.status(400).json({ error: 'Quiz has no questions' });
 
-        // Validate question_count: clamp between 1 and total
-        const resolvedCount = question_count
-            ? Math.max(1, Math.min(parseInt(question_count), totalQuestions))
+        // Validate question_count: clamp between 1 and total, guard against NaN/non-numeric
+        const parsed = parseInt(question_count, 10);
+        const resolvedCount = Number.isFinite(parsed) && parsed > 0
+            ? Math.min(parsed, totalQuestions)
             : totalQuestions;
 
         let session_code;
