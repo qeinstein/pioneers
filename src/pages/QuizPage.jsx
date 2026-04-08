@@ -17,6 +17,9 @@ export default function QuizPage() {
     const [startingCountdown, setStartingCountdown] = useState(null);
     const [timeElapsed, setTimeElapsed] = useState(0);
     const [bookmarked, setBookmarked] = useState(false);
+    const [showLiveModal, setShowLiveModal] = useState(false);
+    const [liveQuestionCount, setLiveQuestionCount] = useState('');
+    const [liveStarting, setLiveStarting] = useState(false);
     const timerRef = useRef(null);
 
     useEffect(() => {
@@ -56,15 +59,27 @@ export default function QuizPage() {
     }
 
     async function startLive() {
+        const total = questions.length;
+        const parsed = parseInt(liveQuestionCount, 10);
+        const resolvedCount = Number.isFinite(parsed) && parsed > 0 ? Math.min(parsed, total) : total;
+        setLiveStarting(true);
         try {
             const res = await fetch('/api/live/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ quiz_id: parseInt(id), question_duration: 20 }),
+                body: JSON.stringify({ quiz_id: parseInt(id, 10), question_duration: 20, question_count: resolvedCount }),
             });
             const data = await res.json();
-            if (res.ok) navigate(`/live/host/${data.session_code}`);
-        } catch { }
+            if (res.ok) {
+                navigate(`/live/host/${data.session_code}`);
+            } else {
+                alert(data.error || 'Failed to create live session. Please try again.');
+            }
+        } catch {
+            alert('Could not reach the server. Please check your connection.');
+        } finally {
+            setLiveStarting(false);
+        }
     }
 
     if (loading) return <div className="page-container"><div className="loading-spinner"><div className="spinner"></div></div></div>;
@@ -111,7 +126,7 @@ export default function QuizPage() {
                     <div className="flex gap-3 justify-center mt-8 flex-wrap">
                         <button onClick={() => navigate(-1)} className="btn btn-ghost">Back</button>
                         <button onClick={toggleBookmark} className="btn btn-ghost">{bookmarked ? 'Saved' : 'Save'}</button>
-                        <button onClick={startLive} className="btn btn-ghost">Start Live</button>
+                        <button onClick={() => { setLiveQuestionCount(''); setShowLiveModal(true); }} className="btn btn-ghost">Start Live</button>
                         <button onClick={() => {
                             setStartingCountdown(5);
                             let t = 4;
@@ -140,6 +155,47 @@ export default function QuizPage() {
                             textShadow: '0 10px 30px rgba(0,0,0,0.5)', fontFamily: 'var(--font-mono)'
                         }}>
                             {startingCountdown}
+                        </div>
+                    </div>
+                )}
+
+                {showLiveModal && (
+                    <div className="modal-overlay" onClick={() => setShowLiveModal(false)}>
+                        <div className="modal-content" onClick={e => e.stopPropagation()}>
+                            <h2 style={{ fontSize: 'var(--font-xl)', fontWeight: 700, marginBottom: 'var(--space-1)' }}>Start Live Quiz</h2>
+                            <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-6)' }}>
+                                {quiz.title}
+                            </p>
+
+                            <label className="form-label">Number of questions</label>
+                            <div className="flex gap-2 mb-2">
+                                <input
+                                    type="number"
+                                    className="form-input"
+                                    min={1}
+                                    max={questions.length}
+                                    placeholder={`All (${questions.length})`}
+                                    value={liveQuestionCount}
+                                    onChange={e => setLiveQuestionCount(e.target.value)}
+                                />
+                                <button className="btn btn-ghost btn-sm" onClick={() => setLiveQuestionCount(String(questions.length))}>
+                                    All
+                                </button>
+                            </div>
+                            <p style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-6)' }}>
+                                {liveQuestionCount
+                                    ? `${Math.max(1, Math.min(parseInt(liveQuestionCount) || 1, questions.length))} of ${questions.length} questions, picked at random`
+                                    : `All ${questions.length} questions will be used`}
+                            </p>
+
+                            <div className="flex gap-3">
+                                <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setShowLiveModal(false)}>
+                                    Cancel
+                                </button>
+                                <button className="btn btn-primary" style={{ flex: 1 }} onClick={startLive} disabled={liveStarting}>
+                                    {liveStarting ? 'Creating...' : 'Start Live'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
