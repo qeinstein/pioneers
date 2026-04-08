@@ -26,6 +26,7 @@ export default function LiveHost() {
     const [answerResult, setAnswerResult] = useState(null);
     const [totalScore, setTotalScore] = useState(0);
 
+    const [copied, setCopied] = useState(false);
     const timerRef = useRef(null);
     const answerStartRef = useRef(null);
 
@@ -124,12 +125,86 @@ export default function LiveHost() {
     if (phase === 'waiting') {
         const BUBBLE_COLORS = ['#7c3aed','#3b82f6','#22c55e','#eab308','#ef4444','#ec4899','#06b6d4','#f97316'];
         const readyCount = participants.filter(p => p.is_ready).length;
+        const joinLink = `${window.location.origin}/live/play/${code.toUpperCase()}`;
+
+        function copyLink() {
+            navigator.clipboard.writeText(joinLink).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            });
+        }
+
         return (
             <div className="page-container" style={{ textAlign: 'center' }}>
                 <div className="card-static animate-scale-in" style={{ maxWidth: '620px', margin: '0 auto', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-xl)', padding: 'var(--space-8)' }}>
                     <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 'var(--space-4)' }}>JOIN CODE</div>
                     <div style={{ fontSize: 'var(--font-4xl)', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--primary)', fontFamily: 'var(--font-mono)', marginBottom: 'var(--space-2)' }}>{code.toUpperCase()}</div>
-                    <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-6)' }}>{session.quiz_title}</p>
+                    <p style={{ fontSize: 'var(--font-sm)', color: 'var(--text-secondary)', marginBottom: 'var(--space-4)' }}>{session.quiz_title}</p>
+
+                    {/* Share link */}
+                    <div style={{ marginBottom: 'var(--space-6)' }}>
+                        <div style={{
+                            fontSize: 'var(--font-xs)', color: 'var(--text-muted)',
+                            textTransform: 'uppercase', letterSpacing: '0.08em',
+                            marginBottom: 'var(--space-2)',
+                        }}>
+                            Share with participants
+                        </div>
+                        <div style={{
+                            display: 'flex', alignItems: 'center',
+                            background: 'var(--bg-input)',
+                            border: `1px solid ${copied ? 'var(--success)' : 'var(--border-color)'}`,
+                            borderRadius: 'var(--radius-lg)',
+                            overflow: 'hidden',
+                            transition: 'border-color 0.2s ease',
+                        }}>
+                            <span style={{
+                                flex: 1,
+                                padding: 'var(--space-3) var(--space-4)',
+                                fontSize: 'var(--font-xs)',
+                                color: 'var(--text-secondary)',
+                                fontFamily: 'var(--font-mono)',
+                                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                textAlign: 'left',
+                            }}>
+                                {joinLink}
+                            </span>
+                            <button
+                                onClick={copyLink}
+                                style={{
+                                    flexShrink: 0,
+                                    height: '100%',
+                                    padding: 'var(--space-3) var(--space-4)',
+                                    background: copied ? 'var(--success)' : 'var(--primary)',
+                                    color: 'white',
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    fontSize: 'var(--font-xs)',
+                                    fontWeight: 700,
+                                    letterSpacing: '0.03em',
+                                    transition: 'background 0.2s ease',
+                                    display: 'flex', alignItems: 'center', gap: '6px',
+                                }}
+                            >
+                                {copied ? (
+                                    <>
+                                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                                            <path d="M2 6l3 3 5-5" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                                        </svg>
+                                        Copied
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                                            <rect x="4" y="4" width="8" height="9" rx="1.5" stroke="white" strokeWidth="1.5"/>
+                                            <path d="M2 9.5V3a1.5 1.5 0 0 1 1.5-1.5H8" stroke="white" strokeWidth="1.5" strokeLinecap="round"/>
+                                        </svg>
+                                        Copy Link
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
 
                     <div style={{ padding: 'var(--space-6)', background: 'var(--bg-input)', borderRadius: 'var(--radius-lg)', marginBottom: 'var(--space-6)', minHeight: '120px' }}>
                         <div style={{ fontSize: 'var(--font-xs)', color: 'var(--text-muted)', marginBottom: 'var(--space-4)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
