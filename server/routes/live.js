@@ -14,12 +14,18 @@ function generateCode() {
 // POST /api/live/create — create a live session from an existing quiz
 router.post('/create', verifyToken, async (req, res) => {
     try {
-        const { quiz_id, question_duration } = req.body;
+        const { quiz_id, question_duration, question_count } = req.body;
         const quiz = await db.prepare('SELECT * FROM quizzes WHERE id = ? AND status = ?').get(quiz_id, 'approved');
         if (!quiz) return res.status(404).json({ error: 'Quiz not found or not approved' });
 
         const questions = await db.prepare('SELECT COUNT(*) as c FROM questions WHERE quiz_id = ?').get(quiz_id);
-        if (Number(questions.c) === 0) return res.status(400).json({ error: 'Quiz has no questions' });
+        const totalQuestions = Number(questions.c);
+        if (totalQuestions === 0) return res.status(400).json({ error: 'Quiz has no questions' });
+
+        // Validate question_count: clamp between 1 and total
+        const resolvedCount = question_count
+            ? Math.max(1, Math.min(parseInt(question_count), totalQuestions))
+            : totalQuestions;
 
         let session_code;
         let attempts = 0;
@@ -31,13 +37,14 @@ router.post('/create', verifyToken, async (req, res) => {
         } while (attempts < 10);
 
         const result = await db.prepare(
-            'INSERT INTO live_sessions (quiz_id, host_id, session_code, question_duration) VALUES (?, ?, ?, ?)'
-        ).run(quiz_id, req.user.id, session_code, question_duration || 20);
+            'INSERT INTO live_sessions (quiz_id, host_id, session_code, question_duration, question_count) VALUES (?, ?, ?, ?, ?)'
+        ).run(quiz_id, req.user.id, session_code, question_duration || 20, resolvedCount);
 
         res.status(201).json({
             session_id: result.lastInsertRowid,
             session_code,
             quiz_title: quiz.title,
+            question_count: resolvedCount,
         });
     } catch (err) {
         console.error('Create live session error:', err);

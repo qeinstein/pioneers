@@ -173,7 +173,16 @@ export function setupLiveSocket(io) {
                     'SELECT id FROM questions WHERE quiz_id = ? ORDER BY id'
                 ).all(session.quiz_id);
 
-                const questionIds = questionRows.map(row => row.id);
+                // Shuffle all questions, then take question_count of them
+                const allIds = questionRows.map(row => row.id);
+                for (let i = allIds.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [allIds[i], allIds[j]] = [allIds[j], allIds[i]];
+                }
+                const limit = session.question_count && session.question_count > 0
+                    ? Math.min(session.question_count, allIds.length)
+                    : allIds.length;
+                const questionIds = allIds.slice(0, limit);
 
                 const existingState = activeSessions.get(socket.sessionCode);
                 if (existingState) clearSessionTimer(existingState);
